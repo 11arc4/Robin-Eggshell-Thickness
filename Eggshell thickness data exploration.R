@@ -1,71 +1,73 @@
 
 library(tidyverse)
 library(corrplot)
+library(summarytools)
+library(lme4)
 
-Spec <- read.csv("file:///C:/Users/11arc/Dropbox/AmeliaBob/Robin/GoodSpec.csv")
-shell <- read.csv("file:///C:/Users/11arc/Dropbox/AmeliaBob/Robin/GoodShell.csv")
-
-summary(shell)
+shell <- read.csv("file:///C:/Users/11arc/Documents/Montogomerie Work/Robins/GoodThickness.csv")
+summarytools(shell)
+dfsummary(shell2)
 
 names(shell)
 
-
-shell2 <- shell %>% filter(!is.na(THICKNESS)) %>%
-  select(EggID, NestID, EggNum, FEMID, MALEID, YEAR.x, TYPE, 
-         CLTCHSIZ, SAMDOY,LAYDOY, 
-         MASS, LENGTH, WIDTH, VOLUME,YOLKMAS, ALBMAS, SHELMAS, MEANSTR, Carot_ug_mg,  THICKNESS,
-         FDOY, AGE, BMASS, TARSUS, fem.scaled.mass, fem.resid.mass, r.achieved.fem,  ECTO) %>%
-  mutate(DAYSAFTERLAY_EGGSAMPL =SAMDOY-LAYDOY,
-         DAYSAFTERLAY_FCATCH=FDOY-LAYDOY,
-         THICKNESS= ifelse(THICKNESS>0.13, NA,THICKNESS), 
-         ECTO2 = ifelse(ECTO>0, "ECTOPARASITES", "NONE"))
-
-shell3 <- shell2 %>% filter(!is.na(BMASS))
-
-fmass_mod <- lm(BMASS~TARSUS+DAYSAFTERLAY_FCATCH, data=shell3)
-plot(fmass_mod)
-anova(fmass_mod)
-summary(fmass_mod)
-
-shell3$FRESIDMASS <- resid(fmass_mod)
+shell2 <- shell %>% 
+  select(-"NOTESLP", -"NOTESPE", -"KIT", -"SampleID",-AGEATSAM, -"yolkmass", -"Yolk_sample_mass", -Tng_yolkg, -Yolk_mass, -YolkTug, -fem.scaled.mass, -ECTO.s, -CONDIT) 
 
 
-m <- cor(shell2[,8:ncol(shell2)], use="pairwise.complete.obs")
-res1 <- cor.mtest(shell2[,8:ncol(shell2)], conf.level = .95)
+colnames(shell2) <- c("NestID", "EggLetter", "Year", "Treatment", 
+                      "FemaleID", "MaleID", "ClutchSize", "SampleDOY", 
+                      "IncStage", "LayDOY", "LayOrder_est", "LayOrder_known",
+                      "Mass_egg", "Length_egg", "Width_egg", "Volume_egg",
+                      "Mass_yolk", "Mass_albumin", "Mass_shell", "MeanStrength", 
+                      "Carotenoid_ugml", "Carotenoid_ugg", "Carot_ugyolk", "T_concentration", 
+                      "FcaughtDOY", "FemaleAge", "Ectoparasites", "Mass_female", 
+                      "Tarsus_female", "YellowAreaScore_female", "ColorRAchieved_female", 
+                      "Lum_egg_s", "HPhi_egg_s", "RVec_egg_s", "Thickness_egg"
+                      )
+
+shell3 <- shell2 %>%
+  group_by(NestID) %>% 
+  mutate(ClutchMass_shell=sum(Mass_shell), 
+         Ectoparasites2 = ifelse(Ectoparasites>0, "YES", "NO")) 
+
+###Calculate female body condition as residual body mass in Mass ~ Tarsus
+Female <- shell3 %>% 
+  group_by(FemaleID, FcaughtDOY, FemaleAge, Mass_female, Tarsus_female) %>%
+  summarise(n=length(unique(Mass_female))) %>% select(-n) %>% filter(!is.na(Mass_female))
+#no female was caught more than once
+
+residmod <- lm(Mass_female ~ Tarsus_female , data=Female)
+plot(residmod) #looks flawless
+Female$ResidMass_female <- resid(residmod, "pearson")
+shell2 <- merge(shell3, Female, all.x = T)
+
+rm(residmod, Female)
+
+
+
+m <- cor(shell2[,c(7:35, 37)], use="pairwise.complete.obs")
+res1 <- cor.mtest(shell2[,7:37],  conf.level = .95)
 corrplot(m, p.mat=res1$p, sig.level = 0.05, insig="blank")
  
 
 
-
-ggplot(shell2 , aes(x=THICKNESS, y=SHELMAS))+
-  geom_point()+
-  labs(x="Thickness (mm)", y="Shell mass (g?)")+
-  geom_smooth(method='glm')
-
-
-ggplot(shell2 , aes(x=THICKNESS, y=MEANSTR))+
-  geom_point()+
-  labs(x="Thickness (mm)", y="Strength")+
-  geom_smooth(method='glm')
-
-ggplot(shell2 , aes(y=THICKNESS*100, x=VOLUME))+
-  geom_point()+
-  labs(y="Thickness", x="Volume")+
-  geom_smooth(method='glm', method.args= list(family="poisson"))
-
-ggplot(shell2 , aes(y=THICKNESS, x=ECTO))+
-  geom_jitter()+
-  labs(y="Thickness", x="Ectoparasites")+
-  geom_smooth(method='glm')
-#Not that many points with Ectoparasites compared to without. Lets 
-
-ggplot(shell2 %>% filter(!is.na(ECTO2)) , aes(y=THICKNESS, x=ECTO2, fill=ECTO2))+
-  geom_boxplot(show.legend = F)+
-  labs(y="Thickness", x="")
+####Are shells thinner when there are more eggs in the clutch? 
+hist(shell2$ClutchSize, breaks=4) 
+# we should consider dropping all clutches that don't have 3-4 eggs since there are so few. 
+shell3 <- shell2 %>% group_by(NestID) %>% filter(ClutchSize %in% c(3,4)& n()>1) 
 
 
 
-ggplot(shell3 , aes(y=THICKNESS, x=FRESIDMASS))+
-  geom_point()+
-  labs(y="Thickness (mm)", x="Resid. body mass")+
-  geom_smooth(method='glm')
+
+
+#########################################################
+#Which variables should we control for?
+shell3 <- shell2 %>% group_by(NestID) %>% filter(CLTCHSIZ %in% c(3,4)& n()>1) 
+
+#Clutch size ()
+
+
+
+
+#Female body conditio
+
