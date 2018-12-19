@@ -1,7 +1,6 @@
 
 library(tidyverse)
 library(corrplot)
-library(summarytools)
 library(lme4)
 
 shell <- read.csv("file:///C:/Users/11arc/Documents/Montogomerie Work/Robins/GoodThickness.csv")
@@ -120,15 +119,156 @@ anova(cmod_T)
 
 
 
-
 #####Do higher quality females have higher quality eggs?
 #Indicators of Female quality: female body mass, yellowAreaScore,
 #colorRAchieved, FAge, Ectoparasites (Y/N)
       ##Maybe test against the total shell mass as well
+mod_femage <- lmer(Thickness_shell ~ FemaleAge + (1|NestID), data=shell4) #No need for random
+mod_femage <- lm(Thickness_shell ~ FemaleAge, data=shell4)
+plot(mod_femage)
+summary(mod_femage)
+#Female age doesn't correlate with shell thickness. 
 
+mod_femcolor <- lmer(Thickness_shell ~ ColorRAchieved_female + (1|NestID), data=shell4) #No random needed
+mod_femcolor <- lm(Thickness_shell ~ ColorRAchieved_female, data=shell4)
+plot(mod_femcolor)
+summary(mod_femcolor)
+#Female color doesn't correlate with shell thickness
+
+mod_femmass <- lmer(Thickness_shell ~ ResidMass_female+ (1|NestID), data=shell4) #No random needed
+mod_femmass <- lm(Thickness_shell ~ ResidMass_female, data=shell4)
+plot(mod_femmass)
+summary(mod_femmass)
+#Female residual body mass doesn't correlate with shell thickness
+
+mod_bill <- lmer(Thickness_shell ~ YellowAreaScore_female + (1|NestID) , data=shell4) #No need to include nestID
+mod_bill <- lm(Thickness_shell ~ YellowAreaScore_female , data=shell4)
+plot(mod_bill)
+summary(mod_bill)
+#There is a non-significant correlation between Bill color and shell thickness
+#(more yellow= slightly thinner)
+ggplot(shell4, aes(x=YellowAreaScore_female, y=Thickness_shell))+
+  geom_count()+
+  geom_smooth(method="lm")
+
+mod_ecto <- lmer(Thickness_shell ~ Ectoparasites2+(1|NestID), data=shell4) #No need for random effect
+mod_ecto <- lm(Thickness_shell ~ Ectoparasites2, data=shell4)
+plot(mod_ecto)
+summary(mod_ecto)
+#When there are more ectoparasites, shells are thinner!
+ggplot(shell4 %>% filter(!is.na(Ectoparasites2)), aes(x=Ectoparasites2, y=Thickness_shell, fill=Ectoparasites2))+
+  geom_boxplot()+
+  geom_count()
+  
 #Indicators of higher quality eggs (presumably laid by higher quality females):
 #Egg volume, strength, mass of yolk, albumen, carotenoid in yolk, Testosterone
 #(?)
+mod_volume <- lmer(Thickness_shell~Volume_egg + (1|NestID), data=shell4) #No random effect necessary
+mod_volume <- lm(Thickness_shell~Volume_egg, data=shell4)
+plot(mod_volume)
+summary(mod_volume)
+#Just barely nonsignificant, but larger eggs (by volume) have thicker shells. 
+ggplot(shell4, aes(y=Thickness_shell, x=Volume_egg))+
+  geom_point(shape=1)+
+  geom_smooth(method="lm")
+
+mod_strength <- lmer(Thickness_shell ~MeanStrength + (1|NestID), data=shell4 ) #Random effect doesn't add anything
+mod_strength <- lm(Thickness_shell ~MeanStrength, data=shell4 )
+plot(mod_strength)
+summary(mod_strength)
+#Thicker shells are stronger
+ggplot(shell4, aes(x=Thickness_shell, y=MeanStrength))+
+  geom_point(shape=1)+
+  geom_smooth(method="lm")
+
+
+#Yolk mass needs to have inc day controlled. 
+shell_yolk <- shell4 %>% filter(!is.na(Mass_yolk) & !is.na(IncStage))
+cmod_yolk <- lm(Mass_yolk~IncStage, data=shell_yolk)
+
+shell_yolk$ResidMass_yolk <- resid(cmod_yolk, "pearson")
+
+mod_yolk <- lmer(Thickness_shell~ ResidMass_yolk + (1|NestID), data=shell_yolk) #Don't need random effect
+mod_yolk <- lm(Thickness_shell~ ResidMass_yolk, data=shell_yolk)
+plot(mod_yolk)
+summary(mod_yolk)
+#Yolk mass doesn't correlate with thickness.
+
+mod_alb <- lmer(Thickness_shell~Mass_albumin + (1|NestID), data=shell4) #Don't need random effect
+mod_alb <- lm(Thickness_shell~Mass_albumin, data=shell4)
+plot(mod_alb)
+summary(mod_alb)
+#No real indication thickness correlates with albumin mass. 
+
+#Carotenoids require correcting for incubation stage
+shell_carot <- shell4 %>% filter(!is.na(Carot_ugyolk) & !is.na(IncStage))
+cmod_carot <- lm(Carot_ugyolk~IncStage, data=shell_carot)
+shell_carot$ResidCarot_ugyolk <- resid(cmod_carot, "pearson")
+
+mod_carot <- lmer(Thickness_shell ~ ResidCarot_ugyolk + (1|NestID), data=shell_carot) #Don't need random effect
+mod_carot <- lm(Thickness_shell ~ ResidCarot_ugyolk, data=shell_carot)
+plot(mod_carot)
+summary(mod_carot)
+#Once you control for how old the egg is, carotenoids don't predict shell thickness. 
+
+
+#Testosterone requires corrections for incubation stage. 
+shell_T <- shell4 %>% filter(!is.na(T_concentration) & !is.na(IncStage))
+cmod_T <- lm(log(T_concentration)~IncStage, data=shell_T)
+shell_T$ResidT <- resid(cmod_T, "pearson")
+
+mod_T <- lmer(Thickness_shell ~ ResidT+(1|NestID), data=shell_T)#Don't need random effect
+mod_T <- lm(Thickness_shell ~ ResidT, data=shell_T)
+plot(mod_T)
+summary(mod_T)
+#Shells are much thicker when the yolk has high testosterone for the age of the egg. 
+
+ggplot(shell_T, aes(x=ResidT, y=Thickness_shell))+
+  geom_point(shape=1)+
+  geom_smooth(method="lm")
+
 
 #Do eggs that need to hatch faster have thinner eggs?
 #Lay order (presumed or otherwise), layDOY
+
+mod_date <- lmer(Thickness_shell ~ LayDOY + (1|NestID), data=shell4) #Don't need random effect
+mod_date <- lm(Thickness_shell ~ LayDOY, data=shell4)
+
+plot(mod_date)
+summary(mod_date)
+ggplot(shell4, aes(y=Thickness_shell, x=LayDOY))+
+  geom_point()+
+  geom_smooth(method="lm")
+#Possible very slight indication that eggs are thinner when laid later, but it's
+#not significant.
+
+mod_order <- lmer(Thickness_shell ~ LayOrder_est + (1|NestID), data=shell4) #Don't need random effect
+mod_order <- lm(Thickness_shell ~ LayOrder_est , data=shell4)
+plot(mod_order)
+summary(mod_order)
+#Laying order does not correlate with thickness
+
+
+
+
+#Egg color 
+mod_eggcolor <- lmer(Thickness_shell ~ Lum_egg_s + HPhi_egg_s + RVec_egg_s + (1|NestID), data=shell4)
+summary(mod_eggcolor)
+anova(mod_eggcolor)
+plot(mod_eggcolor)#Doesn't fit great but not so bad
+#RVec might correlate weakly with thickness but that's about it. 
+
+ggplot(shell4, aes(x=Lum_egg_s, y=Thickness_shell))+
+  geom_point()+
+  geom_smooth(method="lm")
+
+ggplot(shell4, aes(x=HPhi_egg_s, y=Thickness_shell))+
+  geom_point()+
+  geom_smooth(method="lm")
+
+
+ggplot(shell4, aes(x=RVec_egg_s, y=Thickness_shell))+
+  geom_point()+
+  geom_smooth(method="lm")
+
+
