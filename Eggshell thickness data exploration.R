@@ -316,4 +316,37 @@ p.adjust(p, method="fdr")
 
 
 #PCA for egg color. 
+library(stats)
+
+
+PCA_color <- prcomp( shell2[,36:40], 
+               center=T, 
+               scale=T, 
+               retx=T)
+
+#plot(TopEggPCA, type="lines")
+ncomp<-2
+rawLoadings     <- PCA_color$rotation[,1:ncomp] %*% diag(PCA_color$sdev, ncomp, ncomp)
+rotatedLoadings <- varimax(rawLoadings)$loadings
+invLoadings     <- t(pracma::pinv(rotatedLoadings))
+rownames(invLoadings) <- colnames(PCA_color[36:40])
+
+scores <- scale(shell2[,36:40]) %*% invLoadings
+
+####Calculate PCs for Top of Egg
+shell2$PC1 <-  scores[,1] #50% of variance
+shell2$PC2 <-  scores[,2] #ANother 47% variance
+
+
+mod_colorpc <- lmer(Thickness_shell ~ PC1 + (1|NestID), data=shell2) #Don't need random effect
+plot(mod_colorpc)#Doesn't fit well
+hist(resid(mod_colorpc))
+anova(mod_colorpc)
+summary(mod_colorpc)
+
+ggplot(shell2, aes(x=PC1, y=Thickness_shell))+
+  geom_point(shape=1)+
+  geom_smooth(method="lm")
+
+
 
