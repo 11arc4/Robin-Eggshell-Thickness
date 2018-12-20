@@ -2,11 +2,12 @@
 library(tidyverse)
 library(corrplot)
 library(lme4)
+library(lmerTest)
 
-shell <- read.csv("file:///C:/Users/11arc/Documents/Montogomerie Work/Robins/GoodThickness.csv")
+shell <- read.csv("file:///C:/Users/11arc/Documents/Montogomerie Work/Robins/Thickness Dataset (reduced).csv")
 
 shell2 <- shell %>% 
-  select(-"NOTESLP", -"NOTESPE", -"KIT", -"SampleID",-AGEATSAM, -"yolkmass", -"Yolk_sample_mass", -Tng_yolkg, -Yolk_mass, -YolkTug, -fem.scaled.mass, -ECTO.s, -CONDIT) 
+  select(-"NOTESLP", -"NOTESPE", -"KIT", -"SampleID",-AGEATSAM, -"Yolk_sample_mass", -Tng_yolkg,-Tng_yolkmg, -YolkTug, -CONDIT) 
 
 
 colnames(shell2) <- c("NestID", "EggLetter", "Year", "Treatment", 
@@ -16,19 +17,22 @@ colnames(shell2) <- c("NestID", "EggLetter", "Year", "Treatment",
                       "Mass_yolk", "Mass_albumin", "Mass_shell", "MeanStrength", 
                       "Carotenoid_ugml", "Carotenoid_ugg", "Carot_ugyolk", "T_concentration", 
                       "FcaughtDOY", "FemaleAge", "Ectoparasites", "Mass_female", 
-                      "Tarsus_female", "YellowAreaScore_female", "ColorRAchieved_female", 
-                      "Lum_egg_s", "HPhi_egg_s", "RVec_egg_s", "Thickness_shell"
+                      "Tarsus_female", "YellowAreaScore_female", "HTheta_female", "HPhi_female",
+                      "RVec_female", "Lum_female", "ScaledBodyMass_female", "HTheta_egg", 
+                      "HPhi_egg", "RVec_egg", "RMax_egg", "RAchieved_egg", 
+                      "Lum_egg", "Thickness_shell"
                       )
 
-shell3 <- shell2 %>%
+shell2 <- shell2 %>%
   group_by(NestID) %>% 
   mutate(ClutchMass_shell=sum(Mass_shell), 
          Ectoparasites2 = ifelse(Ectoparasites>0, "YES", "NO"), 
          EggAge = SampleDOY-LayDOY, 
-         Mass_yolk= ifelse(Mass_yolk>3, NA, Mass_yolk)) 
+         Mass_yolk= ifelse(Mass_yolk>3, NA, Mass_yolk), 
+         ClutchInitiationDate=floor(mean(LayDOY[LayOrder_est<2]))) 
 
 ###Calculate female body condition as residual body mass in Mass ~ Tarsus
-Female <- shell3 %>% 
+Female <- shell2 %>% 
   group_by(FemaleID, FcaughtDOY, FemaleAge, Mass_female, Tarsus_female) %>%
   summarise(n=length(unique(Mass_female))) %>% select(-n) %>% filter(!is.na(Mass_female))
 #no female was caught more than once
@@ -36,7 +40,7 @@ Female <- shell3 %>%
 residmod <- lm(Mass_female ~ Tarsus_female , data=Female)
 plot(residmod) #looks flawless
 Female$ResidMass_female <- resid(residmod, "pearson")
-shell3 <- merge(shell3, Female, all.x = T)
+shell2 <- merge(shell2, Female, all.x = T, all.y=T)
 
 rm(residmod, Female)
 
@@ -51,7 +55,7 @@ corrplot(m, p.mat=res1$p, sig.level = 0.05, insig="blank")
 ####Are shells thinner when there are more eggs in the clutch? 
 hist(shell2$ClutchSize, breaks=4) 
 # we should consider dropping all clutches that don't have 3-4 eggs since there are so few. 
-shell4 <- shell3 %>% group_by(NestID) %>% filter(ClutchSize %in% c(3,4) )
+shell3 <- shell2 %>% group_by(NestID) %>% filter(ClutchSize %in% c(3,4) )
 
 
 
@@ -61,7 +65,7 @@ shell4 <- shell3 %>% group_by(NestID) %>% filter(ClutchSize %in% c(3,4) )
 #Which variables should we see if we need to control for them? E.g., things that we hope don't matter. 
 
 #Year, Treatment, IncStage (SampleDOY-LayDOY) 
-mod_year <- lm(Thickness_shell~factor(Year), data=shell4)
+mod_year <- lmer(Thickness_shell~factor(Year)+ (1|NestID), data=shell2)
 plot(mod_year)
 summary(mod_year)
 anova(mod_year)
@@ -83,14 +87,14 @@ hist(shell4$IncStage)
 
 
 #Should still check to see if Inc Stage influenced  egg qualities (mass, carotenoids, testosterone)
-cmod_yolk <- lm(Mass_yolk~IncStage, data=shell4)
+cmod_yolk <- lm(Mass_yolk~IncStage, data=shell2)
 plot(cmod_yolk) #saw some outliers on the histogram, now removed those above and it's much better
 summary(cmod_yolk)
 anova(cmod_yolk)
 #Yes it really does. We will need to control for this....
 
 
-cmod_eggmass <- lm(Mass_egg~IncStage, data=shell4)
+cmod_eggmass <- lm(Mass_egg~IncStage, data=shell2)
 plot(cmod_eggmass) #fits perfectly
 summary(cmod_eggmass)
 anova(cmod_eggmass)
@@ -98,20 +102,20 @@ anova(cmod_eggmass)
 
 
 
-cmod_alb <- lm(Mass_albumin~IncStage, data=shell4)
+cmod_alb <- lm(Mass_albumin~IncStage, data=shell2)
 plot(cmod_alb) #not really normal even a little bit
 summary(cmod_eggmass)
 anova(cmod_eggmass)
 #Don't need to control for age of eggs in albumin mass (ignoring normality issues)
 
 
-cmod_carot <- lm(Carot_ugyolk~IncStage, data=shell4)
+cmod_carot <- lm(Carot_ugyolk~IncStage, data=shell2)
 plot(cmod_carot) #Pretty good fit
 summary(cmod_carot)
 anova(cmod_carot)
 #Must control for age of egg when analysing carotenoids in yolk
 
-cmod_T <- lm(log(T_concentration)~IncStage, data=shell4)
+cmod_T <- lm(log(T_concentration)~IncStage, data=shell2)
 plot(cmod_T) #Pretty good fit
 summary(cmod_T)
 anova(cmod_T)
@@ -123,67 +127,93 @@ anova(cmod_T)
 #Indicators of Female quality: female body mass, yellowAreaScore,
 #colorRAchieved, FAge, Ectoparasites (Y/N)
       ##Maybe test against the total shell mass as well
-mod_femage <- lmer(Thickness_shell ~ FemaleAge + (1|NestID), data=shell4) #No need for random
-mod_femage <- lm(Thickness_shell ~ FemaleAge, data=shell4)
+mod_femage <- lmer(Thickness_shell ~ FemaleAge + (1|NestID), data=shell2) #No need for random
+#mod_femage <- lm(Thickness_shell ~ FemaleAge, data=shell2)
 plot(mod_femage)
 summary(mod_femage)
+anova(mod_femage)
 #Female age doesn't correlate with shell thickness. 
 
-mod_femcolor <- lmer(Thickness_shell ~ ColorRAchieved_female + (1|NestID), data=shell4) #No random needed
-mod_femcolor <- lm(Thickness_shell ~ ColorRAchieved_female, data=shell4)
+mod_femcolor <- lmer(Thickness_shell ~ ColorRAchieved_female + (1|NestID), data=shell2) #No random needed
+mod_femcolor <- lm(Thickness_shell ~ ColorRAchieved_female, data=shell2)
 plot(mod_femcolor)
 summary(mod_femcolor)
 #Female color doesn't correlate with shell thickness
 
-mod_femmass <- lmer(Thickness_shell ~ ResidMass_female+ (1|NestID), data=shell4) #No random needed
-mod_femmass <- lm(Thickness_shell ~ ResidMass_female, data=shell4)
-plot(mod_femmass)
-summary(mod_femmass)
+mod_femcondition <- lmer(Thickness_shell ~ ScaledBodyMass_female+ (1|NestID), data=shell2) #No random needed
+#mod_femcondition <- lm(Thickness_shell ~ ScaledBodyMass_female, data=shell2)
+plot(mod_femcondition)
+summary(mod_femcondition)
+anova(mod_femcondition)
 #Female residual body mass doesn't correlate with shell thickness
 
-mod_bill <- lmer(Thickness_shell ~ YellowAreaScore_female + (1|NestID) , data=shell4) #No need to include nestID
-mod_bill <- lm(Thickness_shell ~ YellowAreaScore_female , data=shell4)
+mod_bill <- lmer(Thickness_shell ~ YellowAreaScore_female + (1|NestID) , data=shell2) #No need to include nestID
+#mod_bill <- lmer(Thickness_shell ~ YellowAreaScore_female + (1|NestID) , data=shell2 %>% filter(YellowAreaScore_female>1 & Thickness_shell<0.14 & Thickness_shell>0.08)) #No need to include nestID
+#Those couple of points do drive the slight trend. We won't make too much of it then. 
+
+#mod_bill <- lm(Thickness_shell ~ YellowAreaScore_female , data=shell2)
 plot(mod_bill)
 summary(mod_bill)
+anova(mod_bill)
+
 #There is a non-significant correlation between Bill color and shell thickness
 #(more yellow= slightly thinner)
-ggplot(shell4, aes(x=YellowAreaScore_female, y=Thickness_shell))+
+ggplot(shell2, aes(x=YellowAreaScore_female, y=Thickness_shell))+
   geom_count()+
-  geom_smooth(method="lm")
+  geom_smooth(method="lm")+
+  labs(x="Proportion of yellow", y="Eggshell thickness (mm)" )+
+  theme_classic()
 
-mod_ecto <- lmer(Thickness_shell ~ Ectoparasites2+(1|NestID), data=shell4) #No need for random effect
-mod_ecto <- lm(Thickness_shell ~ Ectoparasites2, data=shell4)
+
+#mod_ecto <- lmer(Thickness_shell ~ log(Ectoparasites+1)+(1|NestID), data=shell2) #No need for random effect
+#Based on AICc log is the better model but it's not as good of a visual so I
+#don't really trust it very well.
+mod_ecto <- lmer(Thickness_shell ~ Ectoparasites2+(1|NestID), data=shell2) #No need for random effect
+#mod_ecto <- lm(Thickness_shell ~ Ectoparasites2, data=shell2)
 plot(mod_ecto)
 summary(mod_ecto)
+anova(mod_ecto)
 #When there are more ectoparasites, shells are thinner!
-ggplot(shell4 %>% filter(!is.na(Ectoparasites2)), aes(x=Ectoparasites2, y=Thickness_shell, fill=Ectoparasites2))+
+ggplot(shell2 %>% filter(!is.na(Ectoparasites2)), aes(x=(Ectoparasites), y=Thickness_shell))+
+  geom_count()+
+  geom_smooth(method="lm", formula=y~log(x+1))+
+  labs(x="Ectoparasites on crown", y="Eggshell thickness (mm)" )+
+  theme_classic()+
+  scale_x_log10()
+
+ggplot(shell2 %>% filter(!is.na(Ectoparasites2)), aes(x=Ectoparasites2, y=Thickness_shell))+
   geom_boxplot()+
-  geom_count()
+  geom_count()+
+  labs(x="Ectoparasites on crown", y="Eggshell thickness (mm)" )+
+  theme_classic()
   
 #Indicators of higher quality eggs (presumably laid by higher quality females):
 #Egg volume, strength, mass of yolk, albumen, carotenoid in yolk, Testosterone
 #(?)
-mod_volume <- lmer(Thickness_shell~Volume_egg + (1|NestID), data=shell4) #No random effect necessary
-mod_volume <- lm(Thickness_shell~Volume_egg, data=shell4)
+mod_volume <- lmer(Thickness_shell~Volume_egg + (1|NestID), data=shell2) #No random effect necessary
+#mod_volume <- lm(Thickness_shell~Volume_egg, data=shell2)
 plot(mod_volume)
 summary(mod_volume)
-#Just barely nonsignificant, but larger eggs (by volume) have thicker shells. 
-ggplot(shell4, aes(y=Thickness_shell, x=Volume_egg))+
+anova(mod_volume)
+# larger eggs (by volume) have thicker shells. 
+ggplot(shell2, aes(y=Thickness_shell, x=Volume_egg))+
   geom_point(shape=1)+
   geom_smooth(method="lm")
 
-mod_strength <- lmer(Thickness_shell ~MeanStrength + (1|NestID), data=shell4 ) #Random effect doesn't add anything
-mod_strength <- lm(Thickness_shell ~MeanStrength, data=shell4 )
+mod_strength <- lmer(Thickness_shell ~MeanStrength + (1|NestID), data=shell2 ) #Random effect doesn't add anything
+mod_strength <- lm(Thickness_shell ~MeanStrength, data=shell2 )
 plot(mod_strength)
 summary(mod_strength)
 #Thicker shells are stronger
-ggplot(shell4, aes(x=Thickness_shell, y=MeanStrength))+
+ggplot(shell2, aes(x=Thickness_shell, y=MeanStrength))+
   geom_point(shape=1)+
-  geom_smooth(method="lm")
+  geom_smooth(method="lm")+
+  labs(x="Volume (ml?)", y="Eggshell thickness (mm)" )+
+  theme_classic()
 
 
 #Yolk mass needs to have inc day controlled. 
-shell_yolk <- shell4 %>% filter(!is.na(Mass_yolk) & !is.na(IncStage))
+shell_yolk <- shell2 %>% filter(!is.na(Mass_yolk) & !is.na(IncStage))
 cmod_yolk <- lm(Mass_yolk~IncStage, data=shell_yolk)
 
 shell_yolk$ResidMass_yolk <- resid(cmod_yolk, "pearson")
@@ -192,83 +222,116 @@ mod_yolk <- lmer(Thickness_shell~ ResidMass_yolk + (1|NestID), data=shell_yolk) 
 mod_yolk <- lm(Thickness_shell~ ResidMass_yolk, data=shell_yolk)
 plot(mod_yolk)
 summary(mod_yolk)
+anova(mod_yolk)
 #Yolk mass doesn't correlate with thickness.
 
-mod_alb <- lmer(Thickness_shell~Mass_albumin + (1|NestID), data=shell4) #Don't need random effect
-mod_alb <- lm(Thickness_shell~Mass_albumin, data=shell4)
+mod_alb <- lmer(Thickness_shell~Mass_albumin + (1|NestID), data=shell2) #Don't need random effect
+mod_alb <- lm(Thickness_shell~Mass_albumin, data=shell2)
 plot(mod_alb)
 summary(mod_alb)
+anova(mod_alb)
 #No real indication thickness correlates with albumin mass. 
 
 #Carotenoids require correcting for incubation stage
-shell_carot <- shell4 %>% filter(!is.na(Carot_ugyolk) & !is.na(IncStage))
+shell_carot <- shell2 %>% filter(!is.na(Carot_ugyolk) & !is.na(IncStage))
 cmod_carot <- lm(Carot_ugyolk~IncStage, data=shell_carot)
 shell_carot$ResidCarot_ugyolk <- resid(cmod_carot, "pearson")
 
 mod_carot <- lmer(Thickness_shell ~ ResidCarot_ugyolk + (1|NestID), data=shell_carot) #Don't need random effect
-mod_carot <- lm(Thickness_shell ~ ResidCarot_ugyolk, data=shell_carot)
+#mod_carot <- lm(Thickness_shell ~ ResidCarot_ugyolk, data=shell_carot)
 plot(mod_carot)
 summary(mod_carot)
+anova(mod_carot)
 #Once you control for how old the egg is, carotenoids don't predict shell thickness. 
 
 
 #Testosterone requires corrections for incubation stage. 
-shell_T <- shell4 %>% filter(!is.na(T_concentration) & !is.na(IncStage))
+shell_T <- shell2 %>% filter(!is.na(T_concentration) & !is.na(IncStage))
 cmod_T <- lm(log(T_concentration)~IncStage, data=shell_T)
 shell_T$ResidT <- resid(cmod_T, "pearson")
 
 mod_T <- lmer(Thickness_shell ~ ResidT+(1|NestID), data=shell_T)#Don't need random effect
-mod_T <- lm(Thickness_shell ~ ResidT, data=shell_T)
+#mod_T <- lm(Thickness_shell ~ ResidT, data=shell_T)
 plot(mod_T)
 summary(mod_T)
+anova(mod_T)
 #Shells are much thicker when the yolk has high testosterone for the age of the egg. 
 
 ggplot(shell_T, aes(x=ResidT, y=Thickness_shell))+
   geom_point(shape=1)+
-  geom_smooth(method="lm")
+  geom_smooth(method="lm")+
+  theme_classic()+
+  labs(x="Residual log(yolk testosterone)", y="Eggshell thickness (mm)")
 
+
+
+mod_eggcolor <- lmer(Thickness_shell ~ RAchieved_egg+(1|NestID), data=shell_T)#Don't need random effect
+plot(mod_eggcolor)
+anova(mod_eggcolor)
 
 #Do eggs that need to hatch faster have thinner eggs?
 #Lay order (presumed or otherwise), layDOY
 
-mod_date <- lmer(Thickness_shell ~ LayDOY + (1|NestID), data=shell4) #Don't need random effect
-mod_date <- lm(Thickness_shell ~ LayDOY, data=shell4)
+
+
+mod_date <- lmer(Thickness_shell ~ ClutchInitiationDate + (1|NestID), data=shell2) #Don't need random effect
+#mod_date <- lm(Thickness_shell ~ ClutchInitiationDate, data=shell2)
 
 plot(mod_date)
 summary(mod_date)
-ggplot(shell4, aes(y=Thickness_shell, x=LayDOY))+
-  geom_point()+
+anova(mod_date)
+ggplot(shell2, aes(y=Thickness_shell, x=ClutchInitiationDate))+
+  geom_count()+
   geom_smooth(method="lm")
 #Possible very slight indication that eggs are thinner when laid later, but it's
 #not significant.
 
-mod_order <- lmer(Thickness_shell ~ LayOrder_est + (1|NestID), data=shell4) #Don't need random effect
-mod_order <- lm(Thickness_shell ~ LayOrder_est , data=shell4)
+mod_order <- lmer(Thickness_shell ~ LayOrder_est + (1|NestID), data=shell2) #Don't need random effect
+mod_order <- lm(Thickness_shell ~ LayOrder_est , data=shell2)
 plot(mod_order)
 summary(mod_order)
+anova(mod_order)
 #Laying order does not correlate with thickness
 
-
+mod_clutch <- lmer(Thickness_shell ~ ClutchSize + (1|NestID), data=shell2)
+plot(mod_clutch)
+summary(mod_clutch)
+anova(mod_clutch)
 
 
 #Egg color 
-mod_eggcolor <- lmer(Thickness_shell ~ Lum_egg_s + HPhi_egg_s + RVec_egg_s + (1|NestID), data=shell4)
+mod_eggcolor <- lmer(Thickness_shell ~ Lum_egg_s + HPhi_egg_s + RVec_egg_s + (1|NestID), data=shell2)
 summary(mod_eggcolor)
 anova(mod_eggcolor)
 plot(mod_eggcolor)#Doesn't fit great but not so bad
 #RVec might correlate weakly with thickness but that's about it. 
 
-ggplot(shell4, aes(x=Lum_egg_s, y=Thickness_shell))+
+ggplot(shell2, aes(x=Lum_egg_s, y=Thickness_shell))+
   geom_point()+
   geom_smooth(method="lm")
 
-ggplot(shell4, aes(x=HPhi_egg_s, y=Thickness_shell))+
+ggplot(shell2, aes(x=HPhi_egg_s, y=Thickness_shell))+
   geom_point()+
   geom_smooth(method="lm")
 
 
-ggplot(shell4, aes(x=RVec_egg_s, y=Thickness_shell))+
+ggplot(shell2, aes(x=RVec_egg_s, y=Thickness_shell))+
   geom_point()+
   geom_smooth(method="lm")
+
+
+
+
+models <- c(mod_clutch, mod_date, mod_order, 
+            mod_femage, mod_femcondition, mod_ecto, mod_bill, 
+            mod_volume, mod_yolk, mod_alb, mod_eggcolor, mod_T, mod_carot)
+p <- rep(NA, length(models))
+i=0
+for(mod in models){
+  i=1+i
+  p[i] <- anova(mod)$`Pr(>F)`
+}
+
+p.adjust(p, method="fdr")
 
 

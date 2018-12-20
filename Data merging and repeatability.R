@@ -98,7 +98,7 @@ missing$EggID
 #do we need to take more than one measurement of each shell?)
 
 
-val <- read.csv("file:///C:/Users/11arc/Dropbox/AmeliaBob/Shell thickness validation.csv") %>% arrange(Egg)
+val <- read.csv("file:///C:/Users/11arc/Dropbox/AmeliaBob/Robin/Shell thickness validation.csv") %>% arrange(Egg)
 ggplot(val, aes(x=Egg, y=Thickness))+
   geom_boxplot(aes(fill=Egg))+
   geom_count()
