@@ -6,7 +6,7 @@ library(lmerTest)
 library(stats)
 
 
-shell <- read.csv("file:///C:/Users/11arc/Documents/Montogomerie Work/Robins/Thickness Dataset (reduced).csv")
+shell <- read.csv("file:///C:/Users/11arc/OneDrive/Documents/Montogomerie Work/Robins/Thickness Dataset (reduced).csv")
 
 shell2 <- shell %>% 
   select(-"NOTESLP", -"NOTESPE", -"KIT", -"SampleID", -"Yolk_sample_mass", -Tng_yolkg,-Tng_yolkmg, -YolkTug, -CONDIT) 
@@ -32,6 +32,10 @@ shell2 <- shell2 %>%
          EggAge = SampleDOY-LayDOY, 
          Mass_yolk= ifelse(Mass_yolk>3, NA, Mass_yolk), 
          ClutchInitiationDate=floor(mean(LayDOY[LayOrder_est<2]))) 
+
+
+write.csv(shell2, "file:///C:/Users/11arc/OneDrive/Documents/Montogomerie Work/Robins/Thickness Dataset (for RMarkdown).csv", na="", row.names = F, )
+
 
 ###Calculate female body condition as residual body mass in Mass ~ Tarsus
 Female <- shell2 %>% 
@@ -209,9 +213,9 @@ ggplot(shell2 %>% filter(!is.na(Ectoparasites2)), aes(x=(Ectoparasites), y=Thick
   scale_x_log10()
 
 ggplot(shell2 %>% filter(!is.na(Ectoparasites2)), aes(x=Ectoparasites2, y=Thickness_shell))+
-  geom_boxplot()+
-  geom_count()+
-  labs(x="Ectoparasites on crown", y="Eggshell thickness (mm)" )+
+  geom_violin(trim=F, aes(fill=NULL), show.legend = F)+
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=0.4, show.legend = F)+
+  labs(x="Ectoparasites", y="Eggshell thickness (mm)" )+
   theme_classic()
 
 mod_bill <- lmer(Thickness_shell ~ YellowAreaScore_female + (1|NestID) , data=shell2) #No need to include nestID
@@ -309,19 +313,20 @@ PCA_color <- prcomp( shell2[,c(37:39, 41:42)],
                center=T, 
                scale=T, 
                retx=T)
-
-plot(PCA_color, type="lines")
-ncomp<-2
-rawLoadings     <- PCA_color$rotation[,1:ncomp] %*% diag(PCA_color$sdev, ncomp, ncomp)
-rotatedLoadings <- varimax(rawLoadings)$loadings
-invLoadings     <- t(pracma::pinv(rotatedLoadings))
-rownames(invLoadings) <- colnames(shell2[,c(37:39, 41:42)])
-
-scores <- scale(shell2[,c(37:39, 41:42)]) %*% invLoadings
-
-####Calculate PCs for Top of Egg
-shell2$PC1 <-  scores[,1] #50% of variance
-shell2$PC2 <-  scores[,2] #ANother 47% variance
+##DON'T ROTATE THE LOADINGS-- WE WANT AS MUCH IN PC1 AS WE POSSIBLY CAN GET
+# plot(PCA_color, type="lines")
+# ncomp<-2
+# rawLoadings     <- PCA_color$rotation[,1:ncomp] %*% diag(PCA_color$sdev, ncomp, ncomp)
+# rotatedLoadings <- varimax(rawLoadings)$loadings
+# invLoadings     <- t(pracma::pinv(rotatedLoadings))
+# rownames(invLoadings) <- colnames(shell2[,c(37:39, 41:42)])
+# 
+# scores <- scale(shell2[,c(37:39, 41:42)]) %*% invLoadings
+# 
+# ####Calculate PCs for Top of Egg
+# shell2$PC1 <-  scores[,1] #50% of variance
+# shell2$PC2 <-  scores[,2] #ANother 47% variance
+shell2$PC1 <- predict(PCA_color)[,1]
 
 
 mod_colorpc <- lmer(Thickness_shell ~ PC1 + (1|NestID), data=shell2) #Don't need random effect
@@ -331,32 +336,23 @@ anova(mod_colorpc)
 summary(mod_colorpc)
 
 
-mod_pc <- lm(PC1 ~ EggAge, data=shell2) 
-plot(mod_pc)#Doesn't fit well
-anova(mod_pc)
-ggplot(shell2, aes(x=EggAge, y=PC1))+
-  geom_point()
-  geom_smooth(method="lm")
-#PC1 should be controlled for egg age
-
-mod_pc <- lm(PC2 ~ EggAge, data=shell2[-c(142,114),])
-plot(mod_pc)#Doesn't fit well
-anova(mod_pc)
-ggplot(shell2[-c(142,114),], aes(x=EggAge, y=PC2))+
-  geom_point()+
-  geom_smooth(method="lm")
 
 ggplot(shell2, aes(x=PC1, y=Thickness_shell))+
   geom_point(shape=1)+
   geom_smooth(method="lm")
 
 
-mod_colorpc2 <- lmer(Thickness_shell ~ PC2 + (1|NestID), data=shell2) #Don't need random effect
-plot(mod_colorpc2)#Doesn't fit well
-hist(resid(mod_colorpc2))
-anova(mod_colorpc2)
-summary(mod_colorpc2)
 
-ggplot(shell2, aes(x=PC2, y=Thickness_shell))+
-  geom_point(shape=1)+
-  geom_smooth(method="lm")
+
+
+
+
+
+
+mod <- glmer(T_concentration~Ectoparasites2+ (1|NestID),family="Gamma", data=shell2 %>% filter(!is.na(Ectoparasites2)))
+summary(mod)
+anova(mod)
+
+ggplot(data=shell2 %>% filter(!is.na(Ectoparasites2)), aes(x=Ectoparasites2, y=T_concentration))+
+  geom_boxplot()+
+  geom_jitter()

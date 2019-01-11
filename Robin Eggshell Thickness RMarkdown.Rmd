@@ -1,0 +1,295 @@
+---
+title: "Eggshell Thickness Correlates and Repeatability"
+author: "Amelia Cox"
+date: "January 10, 2019"
+output: word_document
+---
+
+##1. Load libraries
+
+```{r, message=F}
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(stats)
+library(rptR)
+```
+
+
+##2. Load data
+
+```{r setup, include=FALSE}
+shell <- read.csv( "file:///C:/Users/11arc/OneDrive/Documents/Montogomerie Work/Robins/Thickness Dataset (for RMarkdown).csv", na.strings = "")
+
+```
+
+##3. Check to make sure that we don't need to control for relationships between eggshell thickness and year, treatment, or egg age. 
+###3.1 Testing for year effects
+
+```{r}
+mod_year <- lmer(Thickness_shell~factor(Year)+ (1|NestID), data=shell)
+plot(mod_year)
+summary(mod_year)
+anova(mod_year)
+```
+Conclusions: there is no significant relationship between year and eggshell thickness, so we do not need to control for year in future analyses. 
+
+###3.2 Testing for treatment effects
+```{r}
+mod_treatment <- lm(Thickness_shell~Treatment, data=shell)
+plot(mod_treatment)
+summary(mod_treatment)
+anova(mod_treatment)
+```
+Conclusions: there is no significant relationship between treatment and eggshell thickness, so we do not need to control for egg age in future analyses. 
+
+###3.3 Testing for effects of egg age
+```{r}
+mod_incstage <- lm(Thickness_shell~EggAge, data=shell)
+plot(mod_incstage)
+summary(mod_incstage)
+anova(mod_incstage)
+```
+Conclusions: there is no significant relationship between egg age and eggshell thickness, so we do not need to control for egg age in future analyses of eggshell thickness.
+
+##4. Check to make sure incubation stage does not influence characteristics of the fresh egg (egg mass, yolk carotenoids, yolk testosterone)
+
+###4.1 Yolk Mass
+```{r}
+cmod_yolk <- lm(Mass_yolk~IncStage, data=shell[-which(shell$Mass_yolk>=2.2 ),])
+plot(cmod_yolk) #saw some outliers on the histogram, now removed those above and it's much better
+summary(cmod_yolk)
+anova(cmod_yolk)
+
+ggplot(shell, aes(x=IncStage, y=Mass_yolk))+
+  geom_point(color=ifelse(shell$Mass_yolk < 2.2, "black", "red"), shape=1)+
+  geom_smooth(method="lm", data=shell %>% filter(Mass_yolk<2.2), color="black")+
+  geom_smooth(method="lm", color="red")+
+  geom_smooth(method="lm", data=)+
+  theme_classic()
+  
+shell$ResidMass_yolk <- NA
+shell$ResidMass_yolk[-which(shell$Mass_yolk>=2.2 | is.na(shell$Mass_yolk) | is.na(shell$IncStage))] <- resid(cmod_yolk)
+
+
+```
+Conclusion: Yolk mass increases with the length of time eggs have been incubated. We should control for this in future analyses by looking at residual yolk mass. 
+  
+###4.2 Albumen Mass
+```{r}
+cmod_alb <- lm(Mass_albumen~IncStage, data=shell)
+plot(cmod_alb)
+summary(cmod_alb)
+anova(cmod_alb)
+
+ggplot(shell, aes(x=IncStage, y=Mass_albumen))+
+  geom_point( shape=1)+
+  geom_smooth(method="lm")+
+  theme_classic()
+
+shell$ResidMass_albumen <- NA
+shell$ResidMass_albumen[-which(is.na(shell$Mass_albumen) | is.na(shell$IncStage))] <- resid(cmod_alb)
+
+```
+Conclusions: Albumen mass decreases with incubation time, so we should control for that by using residual albumen mass in future analyses.  
+
+###4.3 Yolk Carotenoids 
+```{r}
+cmod_carot <- lm(Carot_ugyolk~IncStage, data=shell[-c(7,92,67), ]) #removed leverage points
+plot(cmod_carot) #Pretty good fit
+summary(cmod_carot)
+anova(cmod_carot)
+ggplot(shell, aes(x=IncStage, y=Carot_ugyolk))+
+  geom_point( shape=1)+
+  geom_point( data=shell[c(7,92,67),], color="red")+
+  geom_smooth(method="lm", color="red")+
+  geom_smooth(method="lm", data=shell[-c(7,92,67),])+
+  theme_classic()
+```
+Conclusion: Once leverage points are removed, there is no relationship between yolk carotenoids and incubation time, so we can use raw carotenoid values. 
+
+###4.4 Yolk Testosterone Concentration
+```{r}
+cmod_T <- lm(T_concentration~IncStage, data=shell%>% filter(T_concentration<12))
+plot(cmod_T) 
+summary(cmod_T)
+anova(cmod_T)
+```
+Conclusion: Yolk testosterone concentration doesn't vary with incubation time, so we can use raw values. 
+
+
+
+##5. Does eggshell thickness correlate with any clutch traits (clutch size, clutch initiation date, laying order)?
+###5.1 Clutch Size
+```{r}
+mod_clutch <- lmer(Thickness_shell ~ ClutchSize + (1|NestID), data=shell)
+plot(mod_clutch)
+summary(mod_clutch)
+anova(mod_clutch)
+hist(shell$ClutchSize)
+```
+Conclusion: Eggshell thickness is not associated with clutch size. However, this may be due to the fact that American robins have very little variation in clutch size, almost always laying 3-4 eggs. 
+
+
+###5.2 Clutch Initiation Date
+```{r}
+mod_date <- lmer(Thickness_shell ~ ClutchInitiationDate + (1|NestID), data=shell) 
+plot(mod_date)
+summary(mod_date)
+anova(mod_date)
+```
+Conclusion: Eggshell thickness is not associated with clutch initiation date. 
+
+###5.3 Laying Order
+```{r}
+mod_order <- lmer(Thickness_shell ~ LayOrder_est + (1|NestID), data=shell)
+plot(mod_order)
+summary(mod_order)
+anova(mod_order)
+```
+Conclusion: Eggshell thickness is not associated with laying order.
+
+
+
+##6. Does eggshell thickness correlate with any female quality indices (age, body condition, ectoparasite load, proportion of yellow on the bill)?
+###6.1 Female Age
+```{r}
+mod_femage <- lmer(Thickness_shell ~ factor(FemaleAge) + (1|NestID), data=shell) 
+plot(mod_femage)
+summary(mod_femage)
+anova(mod_femage)
+```
+Conclusion: Eggshell thickness is not associated with female age. 
+
+
+###6.2 Female body condition
+```{r}
+mod_femcondition <- lmer(Thickness_shell ~ ScaledBodyMass_female+ (1|NestID), data=shell) 
+plot(mod_femcondition)
+summary(mod_femcondition)
+anova(mod_femcondition)
+```
+Conclusion: Eggshell thickness is not associated with female scaled body mass.
+
+###6.3 Female Ectoparasite Load
+```{r}
+mod_ecto <- lmer(Thickness_shell ~ Ectoparasites2+(1|NestID), data=shell)
+plot(mod_ecto)
+summary(mod_ecto)
+anova(mod_ecto)
+
+ggplot(shell %>% filter(!is.na(Ectoparasites2)), aes(x=Ectoparasites2, y=Thickness_shell))+
+  geom_violin(trim=F, aes(fill=NULL), show.legend = F)+
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=0.4, show.legend = F)+
+  labs(x="Ectoparasites", y="Eggshell thickness (mm)" )+
+  theme_classic()
+
+ggplot(shell %>% filter(!is.na(Ectoparasites2)) , aes(x=Ectoparasites2, y=Thickness_shell))+
+  geom_boxplot()+
+  labs(x="Ectoparasites", y="Eggshell thickness (mm)" )+
+  theme_classic()
+
+```
+Conclusion: When the female is infested with ectoparasites, eggshells are thinner. 
+
+
+
+###6.4 Propotion of yellow on female bill
+```{r}
+mod_bill <- lmer(Thickness_shell ~ YellowAreaScore_female + (1|NestID) , data=shell)
+plot(mod_bill)
+summary(mod_bill)
+anova(mod_bill)
+```
+Conclusion: The propotion of yellow on the female's bill is not associated with eggshell thickness. 
+
+##7. Does eggshell thickness correlate with any egg quality indices (volume, yolk mass, albumen mass, color, yolk testosterone concentration, total yolk carotenoids)?
+###7.1 Egg VOlume
+```{r}
+mod_volume <- lmer(Thickness_shell~Volume_egg + (1|NestID), data=shell) 
+plot(mod_volume)
+summary(mod_volume)
+anova(mod_volume)
+ggplot(shell, aes(x=Thickness_shell, y=Volume_egg))+
+  geom_point(shape=1)+
+  geom_smooth(method="lm")+
+  labs(x="Volume (ml?)", y="Eggshell thickness (mm)" )+
+  theme_classic()
+```
+Conclusion: Larger eggs (by volume) have thicker shells. 
+
+###7.2 Residual Yolk Mass
+```{r}
+mod_yolk <- lmer(Thickness_shell~ ResidMass_yolk + (1|NestID), data=shell) 
+plot(mod_yolk)
+summary(mod_yolk)
+anova(mod_yolk)
+```
+Conclusions: Yolk mass is not associated with shell thickness. 
+
+###7.3 Residual Albumen Mass
+```{r}
+mod_alb <- lmer(Thickness_shell~ResidMass_albumen + (1|NestID), data=shell)
+plot(mod_alb)
+summary(mod_alb)
+anova(mod_alb)
+```
+Conclusion: Albumen mass is not associated with eggshell thickness. 
+
+###7.4 Egg Color using PCA
+```{r}
+PCA_color <- prcomp( shell[,c(37:39, 41:42)], 
+               center=T, 
+               scale=T, 
+               retx=T)
+summary(PCA_color) #PC1 is sufficient
+shell$PC1 <- predict(PCA_color)[,1]
+
+mod_colorpc <- lmer(Thickness_shell ~ PC1 + (1|NestID), data=shell) 
+plot(mod_colorpc)
+anova(mod_colorpc)
+summary(mod_colorpc)
+```
+Conclusion: Egg color is not associated with eggshell thickness. 
+
+###7.5 Yolk Testosterone Concentration
+```{r}
+mod_T <- lmer(Thickness_shell ~ T_concentration+(1|NestID), data=shell[which(shell$T_concentration<12),]) #Remove wild outliers because they're exerting leverage
+plot(mod_T)
+summary(mod_T)
+anova(mod_T)
+#Shells are much thicker when the yolk has high testosterone for the age of the egg. 
+
+ggplot(shell %>% filter(T_concentration<12), aes(x=T_concentration, y=Thickness_shell))+
+  geom_point(shape=1)+
+  geom_smooth(method="lm")+
+  theme_classic()+
+  labs(x="Yolk testosterone COncentration (ug/)", y="Eggshell thickness (mm)")
+
+```
+Conclusion: There is a weak relationship between eggshell thickness and yolk testosterone concentration. Eggs with higher yolk testosterone concentrations have thicker shells. 
+
+###7.6 Total Yolk Carotenoids 
+```{r}
+mod_carot <- lmer(Thickness_shell ~ Carot_ugyolk + (1|NestID), data=shell) #Don't need random effect
+plot(mod_carot)
+summary(mod_carot)
+anova(mod_carot)
+
+```
+
+Conclusion: Yolk carotenoids are not associated with eggshell thickness. 
+
+##8 Eggshell thickness repeatability
+##8.1 Load repeatability data
+```{r}
+val <- read.csv("file:///C:/Users/11arc/Dropbox/AmeliaBob/Robin/Shell thickness validation.csv") %>% arrange(Egg)
+```
+##8.2 Calculate repeatability
+```{r}
+rpt1 <- rpt(Thickness ~ (1 | Egg), grname = "Egg", data = val, datatype="Gaussian",
+    nboot = 1000, npermut = 0)
+rpt1
+
+```
+
