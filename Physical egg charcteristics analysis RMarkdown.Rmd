@@ -1,5 +1,5 @@
 ---
-title: "Physical Properties of Robin Egg"
+title: "Physical Properties of Robin Egg--Yolk and albumen"
 author: "Amelia Cox"
 date: "March 18, 2019"
 output: word_document
@@ -11,19 +11,48 @@ output: word_document
 library(tidyverse)
 library(lme4)
 library(lmerTest)
+library(moments)
 ```
 
 
 ##2. Load data
 
-Shell3 is the same shell dataset, with oddly shaped eggs removed and elongation calculated 
+shell2 is the same shell dataset, with oddly shaped eggs removed and elongation calculated 
 
 ```{r setup, include=FALSE}
 setwd("C:/Users/11arc/Dropbox/AmeliaBob/Robin")
 
 shell <- read.csv( "Thickness Dataset (for RMarkdown).csv", na.strings = "", as.is=T)
-shell3 <- shell %>% filter(Length_egg>2.6) %>% mutate(Elongation=Length_egg/Width_egg)
+shell2 <- shell %>% filter(Length_egg>2.6) %>% mutate(Elongation=Length_egg/Width_egg)
 ```
+
+Need to QC the mass of yolk and albumen-- some eggs are labeled as being "too advanced for seperation" or the like. We should probably make a dataset removing them
+```{r}
+hist(shell$Mass_yolk)
+
+shell3 <- shell %>% 
+  filter(!grepl("too advanced", Notes_LP)) %>% 
+  filter(Mass_yolk<2.1 | is.na(Mass_yolk)) %>% 
+  mutate(Elongation=Length_egg/Width_egg)
+#remove eggs labeled as too advanced. There are also 2 eggs with yolk mass >2,6 where they are labeled as being mixed on seperation or growing embryoes
+#ultimately decided to remove all eggs with yolk wass >2.1
+hist(shell3$Mass_yolk)
+
+```
+
+If the mass of the shell, albumen, and yolk are suspiciously lower than the mass of the whole egg, this is an indication that there may be a problem, probably with the albumen. This gets rid of some wonky cracked eggs. Clearly that actually is a problem. 
+```{r}
+shell3 <- shell3 %>% mutate(CalcMassEgg = Mass_albumen+ Mass_shell + Mass_yolk)
+
+hist(shell3$CalcMassEgg)
+hist(shell3$Mass_egg)
+
+hist(shell3$CalcMassEgg/shell3$Mass_egg)
+
+shell4 <- shell3 %>% filter(CalcMassEgg/Mass_egg>=.8)
+
+```
+
 
 ##3. Does Hatching Success and Offspring Growth Rate correlate to yolk or albumen mass? 
 
@@ -34,13 +63,13 @@ to be almost all eggs-- eggs where we don't have that data appear to have broken
 ##4. Do albumen and yolk mass change with age of egg (amount incubated), clutch size, day laid, etc
 
 Check what influences albumen mass
-###4.1 Albumen mass is correlated to incubation stage 
+###4.1 Albumen mass NOT correlated to incubation stage 
 ```{r}
-ggplot(shell3, aes(y=Mass_albumen, x=IncStage ))+
+ggplot(shell4, aes(y=Mass_albumen, x=IncStage ))+
   geom_point()+
   geom_smooth(method="lm")
 
-cmod_albumen1 <- lmer(Mass_albumen ~IncStage + (1|NestID), data=shell3)
+cmod_albumen1 <- lmer(Mass_albumen ~IncStage + (1|NestID), data=shell4)
 plot(cmod_albumen1)
 qqnorm(resid(cmod_albumen1))
 qqline(resid(cmod_albumen1))
@@ -52,11 +81,11 @@ Suggests that inc stage should be controlled for (albumen mass decreases with in
 
 ###4.2 Albumen mass is correlated to laying order
 ```{r}
-ggplot(shell3, aes(y=Mass_albumen, x=LayOrder_est ))+
+ggplot(shell4, aes(y=Mass_albumen, x=LayOrder_est ))+
   geom_point()+
   geom_smooth(method="lm")
 
-cmod_albumen2 <- lmer(Mass_albumen ~LayOrder_est + (1|NestID), data=shell3)
+cmod_albumen2 <- lmer(Mass_albumen ~LayOrder_est + (1|NestID), data=shell4)
 plot(cmod_albumen2)
 qqnorm(resid(cmod_albumen2))
 qqline(resid(cmod_albumen2))
@@ -64,14 +93,14 @@ qqline(resid(cmod_albumen2))
 anova(cmod_albumen2)
 summary(cmod_albumen2)
 ```
-Suggests that Lay order should be controlled for (albumen mass decreases with inc stage)
+Suggests that Lay order should be controlled for (albumen mass increases with laying order)
 
-###4.3 Albumen mass is not related to clutch size
+###4.3 Albumen mass NOT related to clutch size
 Consider only 3-4 egg clutches since there is only one clutch with 5 eggs in the dataset. 
 ```{r}
-ggplot(shell3, aes(y=Mass_albumen, x=factor(ClutchSize) ))+
+ggplot(shell4, aes(y=Mass_albumen, x=factor(ClutchSize) ))+
   geom_boxplot()
-cmod_albumen3 <- lmer(Mass_albumen ~factor(ClutchSize) + (1|NestID), data=shell3 %>% filter(ClutchSize<5))
+cmod_albumen3 <- lmer(Mass_albumen ~factor(ClutchSize) + (1|NestID), data=shell4 %>% filter(ClutchSize<5))
 plot(cmod_albumen3)
 qqnorm(resid(cmod_albumen3))
 qqline(resid(cmod_albumen3))
@@ -80,27 +109,26 @@ summary(cmod_albumen3)
 ```
 No need to controll for clutch size
 
-###4.4 Albumen mass is not related to laying date. 
+###4.4 Albumen mass NOT correlated to laying date. 
 ```{r}
-ggplot(shell3, aes(y=Mass_albumen, x=LayDOY ))+
+ggplot(shell4, aes(y=Mass_albumen, x=LayDOY ))+
   geom_point()+
   geom_smooth(method="lm")
 
-cmod_albumen4 <- lmer(Mass_albumen ~LayDOY + (1|NestID), data=shell3)
+cmod_albumen4 <- lmer(Mass_albumen ~LayDOY + (1|NestID), data=shell4)
 plot(cmod_albumen4)
 qqnorm(resid(cmod_albumen4))
 qqline(resid(cmod_albumen4))
-#Not a great fit at the low end, but OK at the high end.
 anova(cmod_albumen4)
 summary(cmod_albumen4)
 ```
 No need to control for lay date
 
-###4.5 Albumen mass does not differ between 2008 and 2009
+###4.5 Albumen mass does NOT differ between 2008 and 2009
 ```{r}
-ggplot(shell3, aes(y=Mass_albumen, x=factor(Year )))+
+ggplot(shell4, aes(y=Mass_albumen, x=factor(Year )))+
   geom_boxplot()
-cmod_albumen5 <- lmer(Mass_albumen ~factor(Year) + (1|NestID), data=shell3 )
+cmod_albumen5 <- lmer(Mass_albumen ~factor(Year) + (1|NestID), data=shell4 )
 plot(cmod_albumen5)
 qqnorm(resid(cmod_albumen5))
 qqline(resid(cmod_albumen5))
@@ -112,45 +140,44 @@ No need to controll for year
 
 ###4.6 Yolk mass is correlated to incubation stage. 
 ```{r}
-ggplot(shell3, aes(y=Mass_yolk, x=IncStage ))+
+ggplot(shell4, aes(y=Mass_yolk, x=IncStage ))+
   geom_point()+
   geom_smooth(method="lm")
 
-cmod_yolk1 <- lmer(Mass_yolk ~IncStage + (1|NestID), data=shell3)
+cmod_yolk1 <- lmer(Mass_yolk ~IncStage + (1|NestID), data=shell4)
 plot(cmod_yolk1)
 qqnorm(resid(cmod_yolk1))
 qqline(resid(cmod_yolk1))
 #pretty OK. 
 anova(cmod_yolk1)
-#suggests that inc stage should be controlled for (yolk mass increases with inc stage)
+summary(cmod_yolk1)
 ```
+suggests that inc stage should be controlled for (yolk mass increases with inc stage). 
 
-###4.7 Yolk mass is correlated to laying order
+
+###4.7 Yolk mass NOT correlated to laying order
 Running with, or without the couple of outliers improves the model fit substantially, but does not change the results. 
 ```{r}
-ggplot(shell3, aes(y=Mass_yolk, x=LayOrder_est ))+
+ggplot(shell4, aes(y=Mass_yolk, x=LayOrder_est ))+
   geom_point()+
   geom_smooth(method="lm")
 
-cmod_yolk2 <- lmer(Mass_yolk ~LayOrder_est + (1|NestID), data=shell3)
-cmod_yolk2 <- lmer(Mass_yolk ~LayOrder_est + (1|NestID), data=shell3 %>% filter(Mass_yolk<2))
+cmod_yolk2 <- lmer(Mass_yolk ~LayOrder_est + (1|NestID), data=shell4)
 
 plot(cmod_yolk2)
 qqnorm(resid(cmod_yolk2))
 qqline(resid(cmod_yolk2))
-#Not a great fit at the high end-- looks to be some pretty strong outliers--
-#checked, we get the same results, so should definitely be controlled
 anova(cmod_yolk2)
 summary(cmod_yolk2)
 ```
-Suggests that Lay order should be controlled for (yolk mass decreases with lay order)
+Laying order doesn't need to be controlled for. 
 
 ###4.8 Yolk mass is unrelated to clutch size
 Only looking at 3-4 egg clutches since only one clutch with 5 eggs. 
 ```{r}
-ggplot(shell3, aes(y=Mass_yolk, x=factor(ClutchSize) ))+
+ggplot(shell4, aes(y=Mass_yolk, x=factor(ClutchSize) ))+
   geom_boxplot()
-cmod_yolk3 <- lmer(Mass_yolk ~factor(ClutchSize) + (1|NestID), data=shell3 %>% filter(ClutchSize<5))
+cmod_yolk3 <- lmer(Mass_yolk ~factor(ClutchSize) + (1|NestID), data=shell4 %>% filter(ClutchSize<5))
 plot(cmod_yolk3)
 qqnorm(resid(cmod_yolk3))
 qqline(resid(cmod_yolk3))
@@ -159,29 +186,28 @@ summary(cmod_yolk3)
 ```
 No need to controll for clutch size
 
-###4.9 Yolk mass is not correlated to laying date
+###4.9 Yolk mass is  correlated to laying date
 ```{r}
-ggplot(shell3, aes(y=Mass_yolk, x=LayDOY ))+
+ggplot(shell4, aes(y=Mass_yolk, x=LayDOY ))+
   geom_point()+
   geom_smooth(method="lm")
 
-cmod_yolk4 <- lmer(Mass_yolk ~LayDOY + (1|NestID), data=shell3)
+cmod_yolk4 <- lmer(Mass_yolk ~LayDOY + (1|NestID), data=shell4)
+
 plot(cmod_yolk4)
 qqnorm(resid(cmod_yolk4))
 qqline(resid(cmod_yolk4))
-#Not a great fit at the low end, but OK at the high end.
 anova(cmod_yolk4)
 summary(cmod_yolk4)
 ```
-No need to control for lay date
+Shoudl probably control for lay date. Yolk mass increases with laying date.  
 
 ###4.11 Yolk mass is correlated to year
 I ran these models with and without the high yolk masses, just to be sure. Fit is better without outliers, but results are the same. 
 ```{r}
-ggplot(shell3, aes(y=Mass_yolk, x=factor(Year )))+
+ggplot(shell4, aes(y=Mass_yolk, x=factor(Year )))+
   geom_boxplot()
-cmod_yolk5 <- lmer(Mass_yolk ~factor(Year) + (1|NestID), data=shell3 )
-cmod_yolk5 <- lmer(Mass_yolk ~factor(Year) + (1|NestID), data=shell3  %>% filter(Mass_yolk<2))
+cmod_yolk5 <- lmer(Mass_yolk ~factor(Year) + (1|NestID), data=shell4 )
 
 plot(cmod_yolk5)
 qqnorm(resid(cmod_yolk5))
@@ -195,10 +221,10 @@ Should control for year with yolk mess-- 2008 was higher.
 #5. What is the relationship between yolk and albumen mass controlling for whatever is necessary?
 Since yolk mass is related to incubation stage, year and laying order, we will include all of those parameters. 
 ```{r}
-ggplot(shell3, aes(y=Mass_yolk, x=Mass_albumen ))+
+ggplot(shell4, aes(y=Mass_yolk, x=Mass_albumen ))+
   geom_point()
 
-mod_ratio <- lmer(Mass_yolk ~ Mass_albumen + IncStage + factor(Year) + LayOrder_est + (1|NestID), data=shell3)
+mod_ratio <- lmer(Mass_yolk ~ Mass_albumen + IncStage + factor(Year) + LayDOY + LayOrder_est+ (1|NestID), data=shell4)
 plot(mod_ratio)
 qqnorm(resid(mod_ratio))
 qqline(resid(mod_ratio))
@@ -209,7 +235,7 @@ No relationship between albumen mass and yolk mass-- This suggests that you coul
 
 #6. Is the degree of elongation is related to albumen mass?
 ```{r}
-ggplot(shell3, aes(y=Elongation, x=Mass_albumen ))+
+ggplot(shell4, aes(y=Elongation, x=Mass_albumen ))+
   geom_point()
 
 mod_elongation <- lmer(Elongation ~  Mass_albumen + (1|NestID), data=shell4)
@@ -224,3 +250,117 @@ No relationship between egg shape (elongation) and Albumen mass.
 
 #7. Do we have dry weights of yolk and albumen and if so analyze those too, and water content (wet-dry mass)? 
 Nope. Just one measurement of weight. I think this is dry but am not 100% sure. 
+
+
+#8. How much within clutch variation is there in comparison to between clutch variation?
+
+###8.1 Within vs between in Yolk Mass
+
+```{r}
+vmod_yolk <- lm(Mass_yolk ~ NestID, data=shell4)
+anova(vmod_yolk)
+
+ggplot(shell4, aes(x=NestID, y=Mass_yolk))+
+  geom_boxplot()
+```
+There is about 1.5x as much between nest variation in yolk mass as within nest. 
+
+
+###8.2 Within vs between in Albumen  Mass
+```{r}
+vmod_albumen <- lm(Mass_albumen ~ NestID, data=shell4)
+anova(vmod_albumen)
+
+ggplot(shell4, aes(x=NestID, y=Mass_albumen))+
+  geom_boxplot()
+
+```
+Just less that 1.5x as much between as within nest variation in albumen mass
+
+###8.3 Within vs between in Egg Mass
+```{r}
+vmod_egg <- lm(Mass_egg ~ NestID, data=shell4)
+anova(vmod_egg)
+
+ggplot(shell4, aes(x=NestID, y=Mass_egg))+
+  geom_boxplot()
+```
+5x as much between nest variation in egg mass than within nest variation. 
+
+###8.4 Within vs between in Egg Shape
+
+```{r}
+vmod_shape <- lm(Elongation ~ NestID, data=shell4)
+anova(vmod_shape)
+
+vmod_shape2 <- lm(Elongation ~ NestID, data=shell4 %>% filter(Elongation >1.1))
+anova(vmod_shape2)
+
+ggplot(shell4, aes(x=NestID, y=Elongation))+
+  geom_boxplot()
+hist(shell4$Mass_yolk)
+
+```
+
+Counting the weird egg shape nest, there is ~5x the variation between nests as within nest. NOT counting the one oddly shaped nest, there is ~4x the variation between nests as within nests. 
+
+
+##9. What (albumen or yolk) increases when egg volume increases?
+
+###9.1 Yolk mass increases with egg volume
+
+```{r}
+ggplot(shell4, aes(x=Mass_yolk, y=Volume_egg))+
+  geom_point()+
+  geom_smooth(method="lm")
+
+vmod_yolk <- lmer(Volume_egg ~ Mass_yolk + (1|NestID), data=shell4)
+plot(vmod_yolk)
+qqnorm(resid(vmod_yolk))
+qqline(resid(vmod_yolk))
+anova(vmod_yolk)
+summary(vmod_yolk)
+
+```
+Just BARELY non significant, but there is no relationship between egg volume and yolk mass
+
+###9.2 Albumen mass increases with egg volume. 
+```{r}
+ggplot(shell4, aes(x=Mass_albumen, y=Volume_egg))+
+  geom_point()+
+  geom_smooth(method="lm")
+
+vmod_alb <- lmer(Volume_egg ~ Mass_albumen + (1|NestID), data=shell4)
+plot(vmod_alb)
+qqnorm(resid(vmod_alb))
+qqline(resid(vmod_alb))
+anova(vmod_alb)
+summary(vmod_alb)
+
+```
+
+Egg volume increases with increasing albumen mass-- albumen is what controls egg size, not yolk. I suspect this is because increasing yolk size requires a lot more investment than increasing albumen size. 
+
+##10. 
+
+##11. Calculate descriptive stats for physical parameters. 
+
+```{r}
+t(shell4 %>% summarise_at(funs(mean, skewness, kurtosis),.vars= c("Mass_yolk", "Mass_albumen", "Volume_egg") ))
+```
+
+##12. Does albumen mass influence eggshell thickness as water balance suggests it might?
+```{r}
+ggplot(shell4, aes(y=Thickness_shell, x=Mass_albumen))+
+  geom_point()
+
+tmod_alb<- lmer(Thickness_shell ~ Mass_albumen + (1|NestID), data=shell4)
+
+plot(tmod_alb)
+qqnorm(resid(tmod_alb))
+qqline(resid(tmod_alb))
+anova(tmod_alb)
+summary(tmod_alb)
+```
+No relationship between shell thickness and albumen mass. 
+

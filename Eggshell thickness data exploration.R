@@ -9,14 +9,14 @@ library(stats)
 shell <- read.csv("file:///C:/Users/11arc/OneDrive/Documents/Montogomerie Work/Robins/Thickness Dataset (reduced).csv")
 
 shell2 <- shell %>% 
-  select(-"NOTESLP", -"NOTESPE", -"KIT", -"SampleID", -"Yolk_sample_mass", -Tng_yolkg,-Tng_yolkmg, -YolkTug, -CONDIT) 
+  select( -"KIT", -"SampleID", -"Yolk_sample_mass", -Tng_yolkg,-Tng_yolkmg, -YolkTug, -CONDIT) 
 
 
 colnames(shell2) <- c("NestID", "EggLetter", "Year", "Treatment", 
                       "FemaleID", "MaleID", "ClutchSize", "SampleDOY", 
                       "IncStage", "LayDOY", "EggAge", "LayOrder_est", "LayOrder_known",
                       "Mass_egg", "Length_egg", "Width_egg", "Volume_egg",
-                      "Mass_yolk", "Mass_albumen", "Mass_shell", "MeanStrength", 
+                      "Mass_yolk", "Mass_albumen", "Mass_shell", "MeanStrength", "Notes_LP", "Notes_PE",
                       "Carotenoid_ugml", "Carotenoid_ugg", "Carot_ugyolk", "T_concentration", 
                       "FcaughtDOY", "FemaleAge", "Ectoparasites", "Mass_female", 
                       "Tarsus_female", "YellowAreaScore_female", "HTheta_female", "HPhi_female",
