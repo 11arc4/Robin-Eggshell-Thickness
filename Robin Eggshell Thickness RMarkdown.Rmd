@@ -25,7 +25,7 @@ shell <- read.csv( "Thickness Dataset (for RMarkdown).csv", na.strings = "", as.
 
 ```
 
-There are a couple of eggs that have high elongation (length to width ratios), indicating that they are unusually shaped. We will preform the analysis with and without them. "shell"  dataset is the full dataset, including the runts, shell2 has 4 runts removed. Interestingly enough, they are all from a single nest (PE24). Perhaps there is something wrong with the female. 
+There are a couple of eggs that have high elongation (length to width ratios), indicating that they are unusually shaped. We will preform the analysis with and without them. "shell"  dataset is the full dataset, including the runts, shell2 has 4 runts removed. Interestingly enough, they are all from a single nest (PE24). Perhaps there is something wrong with the female. Similarly, there are a number of unusually short eggs, which include PE24 and a couple more. We will exclude those eggs in the shell3 dataset. 
 
 ```{r}
 #Calculate elongation
@@ -33,6 +33,9 @@ shell$Elongation <- shell$Length_egg/shell$Width_egg
 hist(shell$Elongation)
 
 shell2  <- shell %>% filter(Elongation >1.1)
+
+shell3 <- shell %>% filter(Length_egg>2.6)
+
 ```
 
 
@@ -615,7 +618,7 @@ Conclusion: Yolk carotenoids are not associated with eggshell thickness when con
 ##8 Eggshell thickness repeatability
 ##8.1 Load repeatability data
 ```{r}
-val <- read.csv("Shell thickness validation.csv") %>% arrange(Egg)
+val <- read.csv("C:/Users/11arc/Dropbox/AmeliaBob/Robin/Shell thickness validation.csv") %>% arrange(Egg)
 ```
 ##8.2 Calculate repeatability
 ```{r}

@@ -1,5 +1,14 @@
 
 
+library(tidyverse)
+library(boot)
+library(lme4)
+setwd("C:/Users/11arc/Dropbox/AmeliaBob/Robin")
+
+shell <- read.csv( "Thickness Dataset (for RMarkdown).csv", na.strings = "", as.is=T)
+shell3 <- shell %>% filter(Length_egg>2.6)
+
+
 
 ggplot(shell3, aes(x=Volume_egg, y=Thickness_shell))+
   geom_point()+
@@ -22,8 +31,6 @@ newdata <- data.frame(Volume_egg= seq(min(shell3$Volume_egg), max(shell3$Volume_
 mod_volume <- lmer(Thickness_shell~Volume_egg + (1|NestID), data=shell3) 
 mod_length2 <- lmer(Thickness_shell ~ Length_egg + (1|NestID), data=shell3)
 
-
-library(boot)
 
 sfun2 <- function(x) {
   simulate(x,newdata=newdata,re.form=~0,
@@ -74,7 +81,7 @@ PanelA <- ggplot()+
   geom_ribbon(data=dd, aes(x=Length_egg, ymin=LCL_l, ymax=UCL_l), alpha=0.3)+
   geom_line(data=dd, aes(x=Length_egg, y=Pred_l))+
   geom_point(data=shell3, aes(x=Length_egg, y=Thickness_shell), shape=1)+
-  labs(x="Length Egg (cm)", y="Eggshell Thickness (nm)")
+  labs(x="Length Egg (cm)", y="Eggshell Thickness (mm)")
 
 
 cowplot::plot_grid(PanelA, PanelB, labels="AUTO")
@@ -95,7 +102,7 @@ ggplot(shell3 %>% filter(!is.na(Ectoparasites2)), aes(x=Length_egg, y=Thickness_
   scale_color_grey(start=0.2, end=0.7)+
   geom_point(shape=1)+
   theme_classic()+
-  labs(x="Length Egg (cm)", y="Eggshell Thickness (nm)", color="Ectoparasites")
+  labs(x="Length Egg (cm)", y="Eggshell Thickness (mm)", color="Ectoparasites")
 
 
 
@@ -127,7 +134,7 @@ ggplot()+
   theme_classic()+
   geom_ribbon(data=dd_ecto, aes(x=Length_egg, ymin=LCL, ymax=UCL, fill=Ectoparasites2), alpha=0.3)+
   geom_line(data=dd_ecto, aes(x=Length_egg, y=Pred, linetype=Ectoparasites2))+
-  labs(x="Length Egg (cm)", y="Eggshell Thickness (nm)", shape="Ectoparasites", fill="Ectoparasites", linetype="Ectoparasites")
+  labs(x="Length Egg (cm)", y="Eggshell Thickness (mm)", shape="Ectoparasites", fill="Ectoparasites", linetype="Ectoparasites")
 
 
 
