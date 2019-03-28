@@ -25,7 +25,7 @@ shell <- read.csv( "Thickness Dataset (for RMarkdown).csv", na.strings = "", as.
 
 ```
 
-There are a couple of eggs that have high elongation (length to width ratios), indicating that they are unusually shaped. We will preform the analysis with and without them. "shell"  dataset is the full dataset, including the runts, shell2 has 4 runts removed. Interestingly enough, they are all from a single nest (PE24). Perhaps there is something wrong with the female. Similarly, there are a number of unusually short eggs, which include PE24 and a couple more. We will exclude those eggs in the shell3 dataset. 
+There are a couple of eggs that have high elongation (length to width ratios), indicating that they are unusually shaped. We will preform the analysis with and without them. "shell"  dataset is the full dataset, including the runts, shell2 has 4 runts removed. Interestingly enough, they are all from a single nest (PE24). Perhaps there is something wrong with the female. 
 
 ```{r}
 #Calculate elongation
@@ -33,10 +33,16 @@ shell$Elongation <- shell$Length_egg/shell$Width_egg
 hist(shell$Elongation)
 
 shell2  <- shell %>% filter(Elongation >1.1)
-
-shell3 <- shell %>% filter(Length_egg>2.6)
+```
+A lot of eggs were not able to be seperated (yolk and albumen) effectively, or lost mass due to cracking prior to seperation. If we want to look at albumen or yolk mass, those eggs should be removed for those analyses. That dataset is shell_sep. 
+```{r}
+shell_sep <- shell %>% 
+  filter(!grepl("too advanced", Notes_LP)) %>% 
+  filter(Mass_yolk<2.1 | is.na(Mass_yolk)) %>% 
+  mutate(Elongation=Length_egg/Width_egg)
 
 ```
+
 
 
 ##3. Check to make sure that we don't need to control for relationships between eggshell thickness and year, treatment, or egg age. 
@@ -97,18 +103,6 @@ Conclusions: there is no significant relationship between egg age and eggshell t
 ##4. Does eggshell thickness correlate with egg volume or egg length, as physics suggests it should? 
 
 ###4.1 Egg Volume
-Removing the oddly small eggs that we want to remove for egg length
-```{r}
-mod_volume <- lmer(Thickness_shell~Volume_egg + (1|NestID), data=shell3) 
-plot(mod_volume)
-summary(mod_volume)
-anova(mod_volume)
-confint(mod_volume)
-
-```
-
-
-
 
 ```{r}
 mod_volume <- lmer(Thickness_shell~Volume_egg + (1|NestID), data=shell) 
@@ -129,33 +123,7 @@ plot(resid(mod_volume2)~shell2$Volume_egg) #looks fine
 ```
 Relationship holds, with and without the funny shaped PE24 eggs. However there is an outlier. Confirm that this relationship holds, even when outliers are removed
 
-```{r}
-#Remove the outlier (shown in red in the below plot)
-shell_v <- shell %>% filter(Thickness_shell<0.14 | Volume_egg>6 )
-#Remove the outlier from the shell2 dataset as well
-shell2_v <- shell2 %>% filter(Thickness_shell<0.14 | Volume_egg>6 )
 
-#Without outlier
-mod_volume3 <- lmer(Thickness_shell~Volume_egg + (1|NestID), data=shell_v) 
-plot(mod_volume3)
-summary(mod_volume3)
-anova(mod_volume3)
-
-#Without outlier or weirdly shaped eggs
-mod_volume4 <- lmer(Thickness_shell~Volume_egg + (1|NestID), data=shell2_v) 
-plot(mod_volume4)
-summary(mod_volume4)
-anova(mod_volume4)
-
-ggplot()+
-  geom_point(data=shell, aes(y=Thickness_shell, x=Volume_egg), shape=1)+ #add all points
-  geom_point(data=shell %>% filter(Thickness_shell>0.14 & Volume_egg<6), aes(y=Thickness_shell, x=Volume_egg), color="red")+ # plot outlier point in red
-  geom_smooth(data=shell, aes(y=Thickness_shell, x=Volume_egg), method="lm", color="red")+ #make trend line, including the outlier
-    geom_smooth(data=shell_v, aes(y=Thickness_shell, x=Volume_egg), method="lm", color="black")+ #make trendsline, excluding the outlier
-  labs(x="Volume (ml)", y="Eggshell thickness (mm)" )+
-  theme_classic()
-
-```
 
 Conclusion: Yes, larger eggs (by volume) have thicker shells. Relationship is stronger when the outlier and PE24 (weird shape) egg are removed.  High quality eggs are likely larger so this relationship could indicate that higher quatlity eggs are also thicker. Physics suggests larger eggs should be thicker, so we should probably control for this in other analyses. 
 
@@ -169,25 +137,33 @@ summary(mod_length)
 anova(mod_length)
 ```
 
-There are some major outliers here, so we have removed all eggs with length less that 2.6 from "shell3" and whenever we do length data we will try using that dataset as well. We loose 8 abnormally short eggs. 
+Redoing using only the normally shaped eggs
 ```{r}
-hist(shell$Length_egg)
-shell3 <- shell %>% filter(Length_egg>2.6)
-hist(shell3$Length_egg)
-
-
-
-mod_length2 <- lmer(Thickness_shell ~ Length_egg + (1|NestID), data=shell3)
+mod_length2 <- lmer(Thickness_shell ~ Length_egg + (1|NestID), data=shell2)
 plot(mod_length2)
 summary(mod_length2)
 anova(mod_length2)
 
+```
+There are still some real outliers 
+
+```{r}
+hist(shell2$Length_egg)
+shell3 <- shell %>% filter(Length_egg>2.6)
+hist(shell3$Length_egg)
+
+mod_length3 <- lmer(Thickness_shell ~ Length_egg + (1|NestID), data=shell3)
+plot(mod_length3)
+summary(mod_length3)
+anova(mod_length3)
 
 ggplot()+
   geom_point(data=shell, aes(x=Length_egg, y=Thickness_shell))+
-  geom_point(data=shell %>% filter(Length_egg<2.6), aes(x=Length_egg, y=Thickness_shell), color="red")+
+  geom_point(data=shell %>% filter(Length_egg<2.4), aes(x=Length_egg, y=Thickness_shell), color="red")+
   geom_smooth(data=shell, aes(x=Length_egg, y=Thickness_shell), method="lm", color="red")+
-  geom_smooth(data=shell3, aes(x=Length_egg, y=Thickness_shell), color="black", method="lm")
+  geom_smooth(data=shell2, aes(x=Length_egg, y=Thickness_shell), color="black", method="lm")+
+    geom_smooth(data=shell3, aes(x=Length_egg, y=Thickness_shell), color="black", method="lm")
+
 
 ```
 There are some pretty strong outliers in shell length. Excluding those outliers shows that as shell length increases, so does shell thickness. Since volume is calculated using length, we know that length will be correlated with volume. I will use Length in all future analyses to control for the physics. Similarly, we will exclude all unusually small eggs. 
@@ -416,7 +392,7 @@ There are a couple of eggs with very high Yolk Masses. Looking at those eggs, th
 
 Controlling for egg length
 ```{r}
-mod_yolk <- lmer(Thickness_shell ~ Mass_yolk + Length_egg + (1|NestID), data=shell3)
+mod_yolk <- lmer(Thickness_shell ~ Mass_yolk + Length_egg + (1|NestID), data=shell_sep)
 plot(mod_yolk)
 summary(mod_yolk)
 confint(mod_yolk)
@@ -424,37 +400,24 @@ anova(mod_yolk)
 
 
 
-#same again, but this time removing the suspiciously high yolk masses. 
-mod_yolk <- lmer(Thickness_shell ~ Mass_yolk + Length_egg + (1|NestID), data=shell3 %>% filter(Mass_yolk<2))
-plot(mod_yolk)
-summary(mod_yolk)
-anova(mod_yolk)
+
 
 ```
-Either way, when controlling for egg length, there is no relationship between yolk mass and eggshell thickness. 
+When controlling for egg length, there is no relationship between yolk mass and eggshell thickness. 
 
 
 Controlling for egg volume
 ```{r}
 #Including everything
-mod_yolk <- lmer(Thickness_shell~ Mass_yolk + Volume_egg  + (1|NestID), data=shell) 
+mod_yolk <- lmer(Thickness_shell~ Mass_yolk + Volume_egg  + (1|NestID), data=shell_sep) 
 
 plot(mod_yolk)
 summary(mod_yolk)
 anova(mod_yolk)
 
 
-#Excluding the high yolk masses. 
 
-mod_yolk <- lmer(Thickness_shell~ Mass_yolk + Volume_egg  + (1|NestID), data=shell %>% filter(Mass_yolk <2))
-
-
-#Excluding the high yolk masses and PE24
-mod_yolk <- lmer(Thickness_shell~ Mass_yolk + Volume_egg  + (1|NestID), data=shell2 %>% filter(Mass_yolk <2))
-
-
-
-ggplot(shell, aes(y=Thickness_shell, x=Mass_yolk ))+
+ggplot(shell_sep, aes(y=Thickness_shell, x=Mass_yolk ))+
   geom_point()+
   geom_smooth(method="lm")
 
@@ -465,7 +428,7 @@ Conclusions: Yolk mass not related to shell thickness, whether you include the s
 ###7.2  Albumen Mass
 Controlling for egg length
 ```{r}
-mod_alb <- lmer(Thickness_shell ~Mass_albumen + Length_egg + (1|NestID), data=shell3)
+mod_alb <- lmer(Thickness_shell ~Mass_albumen + Length_egg + (1|NestID), data=shell_sep)
 plot(mod_alb)
 summary(mod_alb)
 confint(mod_alb)
@@ -475,16 +438,12 @@ When you control for egg length, no significant relationship between eggshell th
 
 Controlling for egg volume
 ```{r}
-mod_alb <- lmer(Thickness_shell~Mass_albumen + Volume_egg + (1|NestID), data=shell)
+mod_alb <- lmer(Thickness_shell~Mass_albumen + Volume_egg + (1|NestID), data=shell_sep)
 plot(mod_alb)
 summary(mod_alb)
 anova(mod_alb)
 
 
-mod_alb <- lmer(Thickness_shell~Mass_albumen + Volume_egg + (1|NestID), data=shell2)
-plot(mod_alb)
-summary(mod_alb)
-anova(mod_alb)
 
 ```
 Conclusion: Albumen mass is not associated with eggshell thickness, whether or not PE24 is included.
@@ -493,7 +452,7 @@ Conclusion: Albumen mass is not associated with eggshell thickness, whether or n
 
 First calculate a color PCA
 ```{r}
-PCA_color <- prcomp( shell[,c(37:39, 41:42)], 
+PCA_color <- prcomp( shell[,c(39:41, 43:44)], 
                center=T, 
                scale=T, 
                retx=T)
@@ -618,7 +577,7 @@ Conclusion: Yolk carotenoids are not associated with eggshell thickness when con
 ##8 Eggshell thickness repeatability
 ##8.1 Load repeatability data
 ```{r}
-val <- read.csv("C:/Users/11arc/Dropbox/AmeliaBob/Robin/Shell thickness validation.csv") %>% arrange(Egg)
+val <- read.csv("Shell thickness validation.csv") %>% arrange(Egg)
 ```
 ##8.2 Calculate repeatability
 ```{r}
