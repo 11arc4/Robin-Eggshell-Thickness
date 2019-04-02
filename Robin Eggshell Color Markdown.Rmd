@@ -1,0 +1,400 @@
+---
+title: "Why do robin eggshells contain different levels of bilvardin/are different colors?"
+author: "Amelia Cox"
+date: "April 2, 2019"
+output: word_document
+---
+
+##1. Load libraries
+```{r}
+library(tidyverse)
+library(lmerTest)
+library(lme4)
+library(MuMIn)
+```
+
+##2. Load Data
+
+Here we read in Philena's full dataset, and merge it with the thickness data I collected. Philena's dataset is absolutely massive (>200 columns, many of which are duplicates), so I selected only the relevent variables, and removed all eggs that were oddly shaped (i.e. PE24 and SA16). Since this is a color analysis, if we did not measure the eggshell's color, I removed those eggs. 
+
+Based on Philena's files, r.vec.fem seems to be Philena's best measurement of female bill color, and r.vec.egg the best measurement of eggshell color. They correlated most heavily with bilvardin and carotenoids (?). Hopefully this is correct, as these are the color measurements I used throughout. 
+
+```{r}
+fullegg <- read.csv("file:///C:/Users/11arc/OneDrive/Documents/Montogomerie Work/Robins/Philena's Robin Project/Egg_col_avguv_contents_fel_col2.csv", na.strings = "NA")  %>% 
+  mutate(YEAR=ifelse(!is.na(YEAR.x), YEAR.x, YEAR.y))  
+
+thickness<- read.csv("C:/Users/11arc/Dropbox/AmeliaBob/Robin/Thickness Dataset (for RMarkdown).csv") %>% select(NestID, EggLetter, Year, Thickness_shell)
+fullegg <- full_join(fullegg, thickness, by=c("NestID"="NestID", "EggLetter"="EggLetter", "YEAR"="Year"))
+rm(thickness)
+
+egg <-  fullegg %>%
+  select(c(NestID, EggID, EggLetter, YEAR, TYPE, FEMID, MALEID, CLTCHSIZ, SAMDOY, 
+           INCSTAGE, LAYDOY, AGEATSAM, ESTORD, MASS, LENGTH, WIDTH, 
+           VOLUME, YOLKMAS, ALBMAS, SHELMAS, MEANSTR, KIT, NOTESLP, 
+           NOTESPE, Carot_conc_ugml, Carot_ug_yolk, exclude_carot, exclude_notes, T_concentration,  r.vec.egg, Thickness_shell, FDOY, AGE,
+           ECTO, BMASS, TARSUS, MEANYAS, r.vec.fem)) %>% 
+  filter(!is.na(r.vec.egg)) %>%  #Remove all eggs where their color wasn't measured since this is a color analysis
+  mutate(ELONGATION= LENGTH/WIDTH, 
+         KIT = ifelse(KIT=="LP?", "LP", KIT)) %>%
+  filter(ELONGATION>1.1 & VOLUME<12.5) #Remove oddly shaped PE24 eggs and all SA16 eggs which are oddly large. 
+```
+
+##3. Are there any basic factors we should be controlling for? 
+###3.1 Clutch Size
+Almost all robin nests have 3-4 eggs. Would probably be best to constrain all analyses to these "typical" nesting conditions (drops 16 nests).
+```{r}
+hist(egg$CLTCHSIZ)
+
+#egg %>% group_by (NestID)%>% filter(!(CLTCHSIZ %in% c(3, 4, NA))) %>% summarise(n())
+egg2 <- egg %>% filter(CLTCHSIZ %in% c(3,4, NA) )
+
+
+ggplot(egg, aes(x=factor(CLTCHSIZ), y=r.vec.egg))+
+  geom_dotplot(binaxis = "y", stackdir = "center")
+
+mod <- lmer(r.vec.egg ~ factor(CLTCHSIZ) + (1|NestID), data=egg)
+summary(mod) 
+anova(mod)
+
+
+mod <- lmer(r.vec.egg ~ factor(CLTCHSIZ) + (1|NestID), data=egg2)
+summary(mod) 
+
+```
+Conclusion: There is no difference in eggshell color based on clutch size, including or excluding the small or large clutch sizes. Clutch size does not need to be controlled for in future analyses. 
+###3.2 Laying Date
+There are a number of nests laid late in the year-- this is probably renests. I will exclude all nests laid after 165. 
+```{r}
+hist(egg2$LAYDOY)
+
+ggplot(egg2, aes(x=LAYDOY, y=r.vec.egg))+
+  geom_point()+
+  geom_vline(xintercept = 165)
+
+ggplot(egg2 %>% filter(LAYDOY<165), aes(x=LAYDOY, y=r.vec.egg))+
+  geom_point()+
+  #geom_smooth()+
+  geom_smooth(method="lm")
+
+firstnests <- egg2 %>% filter(LAYDOY<165)
+
+mod <- lmer(r.vec.egg ~ LAYDOY + (1|NestID), data=firstnests)
+summary(mod)
+plot(mod)
+```
+Conclusions: There are clear differences based on laying date and seasonality. I will include laying date in all subsequent models. 
+
+
+###3.3 Year
+```{r}
+ggplot(firstnests, aes(x=factor(YEAR), y=r.vec.egg))+
+  geom_dotplot(binaxis = "y", stackdir = "center")
+
+mod <- lmer(r.vec.egg ~ factor(YEAR) + (1|NestID), data=firstnests)
+summary(mod)
+```
+
+Conclusions: There are no differences in eggshell color by year, so I will not correct for year in future models. 
+
+###3.4 Incubation Stage (measurement of egg age)
+```{r}
+ggplot(firstnests, aes(x=INCSTAGE, y=r.vec.egg))+
+  geom_point()+
+  geom_smooth()
+#OH there are some very old eggs included here. We will need to make sure to take this into account if we ever look at masses. 
+#DOesn't look like there's anythign there though
+
+mod <- lmer(r.vec.egg ~ INCSTAGE + (1|NestID), data=firstnests)
+summary(mod)
+plot(mod)
+#Nope don't need to control for incubation stage. 
+```
+Conclusions: Incubation stage is not correlated to eggshell color. A lot of these eggs are QUITE old though, which we need to consider if we look at masses or anything else that is related to development. 
+
+###3.5 Laying order
+
+```{r}
+ggplot(firstnests, aes(x=ESTORD, y=r.vec.egg))+
+  geom_point()+
+  geom_smooth(method="lm")
+
+mod <- lmer(r.vec.egg ~ ESTORD + (1|NestID), data=firstnests)
+summary(mod)
+plot(mod)
+```
+Conclusion: Laying order is not a significant predictor of eggshell color. We will not include it in future models. 
+
+###3.6 Kit (not sure what this is a kit FOR, but perhaps important?)
+```{r}
+ggplot(firstnests, aes(x=KIT, y=r.vec.egg))+
+  geom_dotplot(binaxis = "y", stackdir = "center")
+
+
+mod <- lmer(r.vec.egg ~ KIT + (1|NestID), data=firstnests)
+summary(mod)
+anova(mod)
+plot(mod)
+```
+Conclusion: Philena's kit does differ from Lori's kit so we will need to control for that in all models. Probably the best way to do that is to just include a term for it. I could also mean center by kit-- I will do this for the plots. To do that I will have to remove the LP kit-- I don't know what kit that was supposed ot be, so can't really do much with it....
+```{r}
+firstnests2 <- firstnests %>% filter(KIT !="LP")
+```
+
+
+##4. What does the blue green color of the egg signal?
+We will use the firstnests2 dataset in all of these analyses. It has all eggs that were laid before 165, are from 3-4 egg clutches, and have a known KIT. 
+
+###4.1 Does the blue green color signal egg quality? 
+Test this by correlating egg color with 6 measures of egg quality
+####4.1a Carotenoid content of yolk
+```{r}
+hist(firstnests2$Carot_ug_yolk)
+
+ggplot(firstnests2, aes(y=Carot_ug_yolk, x=INCSTAGE, color=exclude_carot))+
+  geom_point()+
+  xlim(c(0,3))
+
+carot <- firstnests2 %>% filter(!is.na(Carot_ug_yolk) & Carot_ug_yolk>50 & INCSTAGE<=2)
+
+hist(carot$Carot_ug_yolk)
+
+ggplot(carot, aes(x=Carot_ug_yolk, y=r.vec.egg, color=exclude_carot))+
+  geom_point()+
+  geom_smooth(method="lm")
+
+mod <- lmer(r.vec.egg ~Carot_ug_yolk + LAYDOY +KIT + (1|NestID), data=carot)
+plot(mod)
+summary(mod)
+
+```
+Conclusion: There is no difference in color based on carotenoid content of egg yolk. 
+
+####4.1b Eggshell strength and thickness
+Eggshell strength and thickness are so related to volume, I've put volume into these models as well. 
+```{r}
+ggplot(firstnests2, aes(x=MEANSTR, y=r.vec.egg))+
+  geom_point()+
+  geom_smooth(method="lm")
+
+
+mod <- lmer(r.vec.egg ~MEANSTR +VOLUME+ LAYDOY +KIT + (1|NestID), data=firstnests2)
+plot(mod)
+summary(mod)
+```
+Strength of the egg is correlated to the eggshell color. 
+
+```{r}
+ggplot(firstnests2, aes(x=Thickness_shell, y=r.vec.egg))+
+  geom_point()+
+  geom_smooth(method="lm")
+
+mod <- lmer(r.vec.egg ~Thickness_shell +VOLUME + LAYDOY +KIT + (1|NestID), data=firstnests2)
+plot(mod)
+summary(mod)
+anova(mod)
+
+```
+Conclusions: Eggshell strength but not thickness seems to correlate with chroma (r.vec) TO
+me this might suggest that the color of the egg actually might be adding
+something to the eggshell strength? Or alternatively, birds that increase color
+pigmentation also increase other factors in the eggshell
+
+####4.1c Volume
+```{r}
+hist(firstnests2$VOLUME)
+
+ggplot(firstnests2, aes(x=VOLUME, y=r.vec.egg))+
+  geom_point()+
+  geom_smooth(method="lm")
+
+
+mod <- lmer(r.vec.egg ~VOLUME + LAYDOY + KIT + (1|NestID), data=firstnests2)
+plot(mod)
+summary(mod)
+anova(mod)
+```
+Conclusion: Larger eggs have higher R.vec.egg. Eggshell color is correlated to volume (after controlling for laying date and kit).
+
+####4.1d Yolk Mass
+```{r}
+#Make a better dataset with only eggs that seperated properly for use with the yolk and albumen mass
+sep <- firstnests2 %>% 
+  filter(!grepl("too advanced", NOTESLP) & !is.na(YOLKMAS) & !grepl("mold", NOTESLP) & !grepl("crack", NOTESLP)) %>%
+  mutate(CalcMassEgg = ALBMAS+ SHELMAS + YOLKMAS) %>%
+  mutate(CalctoWeigh = CalcMassEgg/MASS, 
+         YOlktoALB = YOLKMAS/ALBMAS) %>% 
+  filter(CalctoWeigh>0.86)
+
+hist(sep$YOLKMAS)
+hist(sep$ALBMAS)
+
+hist(sep$CalcMassEgg/sep$MASS)
+
+
+ggplot(sep, aes(x=YOLKMAS, y=r.vec.egg))+
+  geom_point()+
+  geom_smooth(method="lm")
+
+
+mod <- lmer(r.vec.egg ~YOLKMAS + LAYDOY + KIT + (1|NestID), data=sep)
+plot(mod)
+summary(mod)
+
+```
+Conclusions: There is no relationship between egg color and yolk mass. 
+
+
+####4.1e Albumen Mass
+```{r}
+ggplot(firstnests2, aes(x=ALBMAS, y=r.vec.egg))+
+  geom_point()+
+  geom_smooth(method="lm")
+
+
+ggplot(sep, aes(x=ALBMAS, y=r.vec.egg))+
+  geom_point()+
+  geom_smooth(method="lm")
+
+
+mod <- lmer(r.vec.egg ~ALBMAS + LAYDOY +KIT + (1|NestID), data=sep)
+plot(mod)
+summary(mod)
+anova(mod)
+
+```
+Conclusions: there is no relationship with albumen mass
+
+
+####4.1f Testosterone Concentration
+```{r}
+ggplot(firstnests2, aes(x=T_concentration, y=r.vec.egg))+
+  geom_point()+
+  geom_smooth(method="lm", formula=y~log(x))
+
+
+mod <- lmer(r.vec.egg ~log(T_concentration) + LAYDOY +KIT+ (1|NestID), data=firstnests2)
+plot(mod)
+summary(mod)
+anova(mod)
+
+```
+Conclusions: Testosterone concentration does not correlate with egg color
+
+
+###4.2 Does the blue green color signal female quality? 
+Test this by correlating egg color with 4 measures of female quality
+####4.1a Female bill color
+
+We have two measures of female bill color, r.vec.fem, and yellow area score. Interestingly they don't really correlate. I ran models of both. 
+```{r}
+ggplot(firstnests2, aes(x=r.vec.fem, y=r.vec.egg))+
+  geom_point()
+
+ggplot(firstnests2, aes(x=MEANYAS, y=r.vec.fem))+
+  geom_point()
+#Hmm. YAS doesn't really match with female bill chroma. How odd. 
+
+mod<- lmer(r.vec.egg ~r.vec.fem + LAYDOY + KIT + (1|NestID), data=firstnests2)
+plot(mod)
+summary(mod)
+
+mod<- lmer(r.vec.egg ~MEANYAS + LAYDOY + KIT + (1|NestID), data=firstnests2)
+plot(mod)
+summary(mod)
+
+```
+Conclusions: Neither r.vec.fem nor yellow area score correlated with eggshell color. Carotenoids in the female's bill is not important to eggshell color. 
+
+####4.1b Ectoparasite load
+As we did before, I suspect it would be much better to treat it as either ectoparasites, or no ectoparasites.
+
+```{r}
+ggplot(firstnests2, aes(x=ECTO, y=r.vec.egg))+
+  geom_point()+
+  geom_smooth()
+
+firstnests2$ECTO2 <- ifelse(firstnests2$ECTO>0, "Yes", "NO")
+
+ggplot(firstnests2 %>% filter(!is.na(ECTO2)), aes(x=ECTO2, y=r.vec.egg))+
+  geom_dotplot(binaxis = "y", stackdir = "center")
+
+ggplot(firstnests2 %>% filter(!is.na(ECTO2)), aes(x=ECTO2, y=r.vec.egg))+
+  geom_boxplot()
+
+mod<- lmer(r.vec.egg ~ECTO2 + LAYDOY +KIT  + (1|NestID), data=firstnests2)
+plot(mod)
+summary(mod)
+anova(mod)
+
+```
+Conclusion: Ectoparasite effect is not longer significnat once KIT is controlled for. Sigh. Nothin going on. 
+
+####4.1c Scaled Mass Index
+First we need to calculate SMI for all birds (ie their mass if they had the mean tarsus length)
+```{r}
+ggplot(data=firstnests2, aes(y=BMASS, x=TARSUS))+
+  geom_point()
+
+smiMod <- lmodel2::lmodel2(log(BMASS) ~ log(TARSUS), data=firstnests2)
+BSMA <- smiMod$regression.results[3,]
+
+L0 <- mean(firstnests2$TARSUS, na.rm=T)
+firstnests2$SMI <- firstnests2$BMASS * ((L0/firstnests2$BMASS)^BSMA[[3]])
+```
+Now we can assess whether eggshell color is correlated. 
+
+There are a number of birds that were caught well after the eggs were laid, rather than before like most. This could interact with eggshell color (ie a lighter bird late in the season could still be in good condition). I calculated the number of days between laying and catching the femal (FDIF). I also calculated whether the bird was caught before or after laying to simplify the model somewhat. 
+```{r}
+ggplot(data=firstnests2, aes(x=SMI, y=r.vec.egg))+
+  geom_point()+
+  geom_smooth()
+
+
+ggplot(data=firstnests2, aes(y=SMI, x=LAYDOY-FDOY))+
+  geom_point()
+
+firstnests2$FDIF <- firstnests2$LAYDOY - firstnests2$FDOY
+
+firstnests2$FDIF2 <- ifelse(firstnests2$FDIF>0, "PostLay", "PreLay")
+
+ggplot(firstnests2, aes(x=FDIF2, y=SMI))+
+  geom_dotplot(binaxis = "y")
+
+mod<- lmer(r.vec.egg ~SMI*FDIF + LAYDOY +KIT + (1|NestID), data=firstnests2)
+plot(mod)
+summary(mod)
+anova(mod)
+
+
+mod<- lmer(r.vec.egg ~SMI*FDIF2 + LAYDOY +KIT + (1|NestID), data=firstnests2)
+plot(mod)
+summary(mod)
+anova(mod)
+```
+Conclusions: SMI and body condition are not indicitive of eggshell color. 
+
+
+####4.1d Female Age
+```{r}
+ggplot(firstnests2 %>% filter(!is.na(AGE)), aes(x=factor(AGE), y=r.vec.egg))+
+  geom_boxplot()
+ggplot(firstnests2 %>% filter(!is.na(AGE)), aes(x=factor(AGE), y=r.vec.egg))+
+  geom_dotplot(binaxis = "y", stackdir = "center")
+
+mod<- lmer(r.vec.egg ~factor(AGE) + LAYDOY +KIT + (1|NestID), data=firstnests2)
+plot(mod)
+summary(mod)
+anova(mod)
+```
+Conclusions: Female age is not predictive of eggshell color. 
+
+
+
+
+
+
+
+
+
+
+

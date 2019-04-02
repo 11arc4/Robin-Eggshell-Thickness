@@ -9,18 +9,26 @@ library(MuMIn)
 
 #Load data
 
-fullegg <- read.csv("file:///C:/Users/11arc/OneDrive/Documents/Montogomerie Work/Robins/Philena's Robin Project/Egg_col_avguv_contents_fel_col2.csv", na.strings = "NA") 
+fullegg <- read.csv("file:///C:/Users/11arc/OneDrive/Documents/Montogomerie Work/Robins/Philena's Robin Project/Egg_col_avguv_contents_fel_col2.csv", na.strings = "NA")  %>% 
+  mutate(YEAR=ifelse(!is.na(YEAR.x), YEAR.x, YEAR.y))  
+#Add thickness data
+thickness<- read.csv("C:/Users/11arc/Dropbox/AmeliaBob/Robin/Thickness Dataset (for RMarkdown).csv") %>% select(NestID, EggLetter, Year, Thickness_shell)
+fullegg <- full_join(fullegg, thickness, by=c("NestID"="NestID", "EggLetter"="EggLetter", "YEAR"="Year"))
 #There are over 200 columns. THis is insane and needs to be cut back. 
 names(fullegg)
+rm(thickness)
 
-egg <-  fullegg  %>% mutate(YEAR=ifelse(!is.na(YEAR.x), YEAR.x, YEAR.y))  %>% select(c(NestID, EggID, YEAR, TYPE, FEMID, MALEID, CLTCHSIZ, SAMDOY, 
-                               INCSTAGE, LAYDOY, AGEATSAM, ESTORD, MASS, LENGTH, WIDTH, 
-                               VOLUME, YOLKMAS, ALBMAS, SHELMAS, MEANSTR, KIT, NOTESLP, 
-                               NOTESPE, Carot_conc_ugml, Carot_ug_yolk, exclude_carot, exclude_notes, T_concentration,  r.vec.egg, FDOY, AGE,
-                               ECTO, BMASS, TARSUS, MEANYAS, r.vec.fem)) %>% 
+egg <-  fullegg %>%
+  select(c(NestID, EggID, EggLetter, YEAR, TYPE, FEMID, MALEID, CLTCHSIZ, SAMDOY, 
+           INCSTAGE, LAYDOY, AGEATSAM, ESTORD, MASS, LENGTH, WIDTH, 
+           VOLUME, YOLKMAS, ALBMAS, SHELMAS, MEANSTR, KIT, NOTESLP, 
+           NOTESPE, Carot_conc_ugml, Carot_ug_yolk, exclude_carot, exclude_notes, T_concentration,  r.vec.egg, Thickness_shell, FDOY, AGE,
+           ECTO, BMASS, TARSUS, MEANYAS, r.vec.fem)) %>% 
   filter(!is.na(r.vec.egg)) %>%  #Remove all eggs where their color wasn't measured since this is a color analysis
   mutate(ELONGATION= LENGTH/WIDTH) %>%
   filter(ELONGATION>1.1 & VOLUME<12.5) #Remove oddly shaped PE24 eggs and all SA16 eggs which are oddly large. 
+
+
 names(egg) #Much more manageable
 
 #r.vec.fem is Philena's chosen measure of female bill color
@@ -80,14 +88,15 @@ plot(mod)
 
 #ANy differences in color by laying order?
 
-ggplot(egg, aes(x=INCSTAGE, y=r.vec.egg))+
+ggplot(egg, aes(x=ESTORD, y=r.vec.egg))+
   geom_point()+
   geom_smooth(method="lm")
 
-mod <- lmer(r.vec.egg ~ INCSTAGE + (1|NestID), data=egg)
+mod <- lmer(r.vec.egg ~ ESTORD + (1|NestID), data=egg)
 summary(mod)
 plot(mod)
-#Don't need to control for incubation sated
+#Don't need to control for laying order
+
 
 #Any difference in color by incubation stage (egg age)?
 
@@ -111,7 +120,7 @@ firstnests <- egg %>%
   filter(LAYDOY<165) 
 
 
-#Is egg quality predictive of egg color?
+####Is egg quality predictive of egg color?
 
 #Carotenoids?
 #Need to make sure you have a dataset with GOOD carotenoid data. A lot of it is super suspect. 
@@ -216,7 +225,114 @@ ggplot(firstnests, aes(x=MEANSTR, y=r.vec.egg))+
   geom_smooth(method="lm")
 
 
-mod <- lmer(r.vec.egg ~MEANSTR + LAYDOY + (1|NestID), data=firstnests)
+mod <- lmer(r.vec.egg ~MEANSTR +VOLUME+ LAYDOY + (1|NestID), data=firstnests)
 plot(mod)
 summary(mod)
 #strength of the egg is correlated to the eggshell color. 
+
+ggplot(firstnests, aes(x=Thickness_shell, y=r.vec.egg))+
+  geom_point()+
+  geom_smooth(method="lm")
+
+mod <- lmer(r.vec.egg ~Thickness_shell +VOLUME + LAYDOY + (1|NestID), data=firstnests)
+plot(mod)
+summary(mod)
+
+#eggshell strength but not thickness seems to correlate with chroma (r.vec) TO
+#me this might suggest that the color of the egg actually might be adding
+#something to the eggshell strength? Or alternatively, birds that increase color
+#pigmentation also increase other factors in the eggshell
+
+
+
+#####Is female quality predictive of egg color?
+
+#Female ectoparasite load
+ggplot(firstnests, aes(x=ECTO, y=r.vec.egg))+
+  geom_point()+
+  geom_smooth()
+
+#As we did before, I suspect it would be much better to treat it as either ectoparasites, or no ectoparasites. 
+firstnests$ECTO2 <- ifelse(firstnests$ECTO>0, "Yes", "NO")
+ggplot(firstnests %>% filter(!is.na(ECTO2)), aes(x=ECTO2, y=r.vec.egg))+
+  geom_dotplot(binaxis = "y", stackdir = "center")
+
+ggplot(firstnests %>% filter(!is.na(ECTO2)), aes(x=ECTO2, y=r.vec.egg))+
+  geom_boxplot()
+
+mod<- lmer(r.vec.egg ~ECTO2 + LAYDOY + (1|NestID), data=firstnests)
+plot(mod)
+summary(mod)
+#Small but significant difference between birds who have ectoparasites and those
+#who dont. Those will more ectoparasites have lower chroma eggs.
+
+ggplot(firstnests%>% filter(!is.na(ECTO2)), aes(color=ECTO2, x=LAYDOY, y=r.vec.egg))+
+  geom_point()+
+  geom_smooth(method="lm")
+
+
+#Female Age
+
+ggplot(firstnests %>% filter(!is.na(AGE)), aes(x=factor(AGE), y=r.vec.egg))+
+  geom_boxplot()
+ggplot(firstnests %>% filter(!is.na(AGE)), aes(x=factor(AGE), y=r.vec.egg))+
+  geom_dotplot(binaxis = "y", stackdir = "center")
+
+mod<- lmer(r.vec.egg ~factor(AGE) + LAYDOY + (1|NestID), data=firstnests)
+plot(mod)
+summary(mod)
+#Nothing going on. UNsurprised. 
+
+#Female condition (SMI)
+
+#First need to calculate scaled mass index. 
+ggplot(data=firstnests, aes(y=BMASS, x=TARSUS))+
+  geom_point()
+
+smiMod <- lmodel2::lmodel2(log(BMASS) ~ log(TARSUS), data=firstnests)
+BSMA <- smiMod$regression.results[3,]
+
+L0 <- mean(firstnests$TARSUS, na.rm=T)
+firstnests$SMI <- firstnests$BMASS * ((L0/firstnests$BMASS)^BSMA[[3]])
+
+ggplot(data=firstnests, aes(x=SMI, y=r.vec.egg))+
+  geom_point()+
+  geom_smooth()
+
+
+ggplot(data=firstnests, aes(y=SMI, x=LAYDOY-FDOY))+
+  geom_point()
+
+firstnests$FDIF <- firstnests$LAYDOY - firstnests$FDOY
+
+mod<- lmer(r.vec.egg ~SMI*FDIF + LAYDOY + (1|NestID), data=firstnests)
+plot(mod)
+summary(mod)
+#SMI is not indicitive
+
+#Female bill color
+
+ggplot(firstnests, aes(x=r.vec.fem, y=r.vec.egg))+
+  geom_point()
+
+ggplot(firstnests, aes(x=MEANYAS, y=r.vec.fem))+
+  geom_point()
+#Hmm. YAS doesn't really match with female bill chroma. How odd. 
+
+mod<- lmer(r.vec.egg ~r.vec.fem*FDIF + LAYDOY + (1|NestID), data=firstnests)
+plot(mod)
+summary(mod)
+#Unsurprisingly, no relationship between bill chromas and egg chroma
+
+mod<- lmer(r.vec.egg ~MEANYAS + LAYDOY + (1|NestID), data=firstnests)
+plot(mod)
+summary(mod)
+#similarly YAS doesn't relate so this is probably real
+
+#Female Head color
+
+#DOn't know what measurements to use for that. 
+
+
+
+
