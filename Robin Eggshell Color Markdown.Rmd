@@ -5,7 +5,7 @@ date: "April 2, 2019"
 output: word_document
 ---
 
-##1. Load libraries
+## 1. Load libraries
 ```{r}
 library(tidyverse)
 library(lmerTest)
@@ -13,7 +13,7 @@ library(lme4)
 library(MuMIn)
 ```
 
-##2. Load Data
+## 2. Load Data
 
 Here we read in Philena's full dataset, and merge it with the thickness data I collected. Philena's dataset is absolutely massive (>200 columns, many of which are duplicates), so I selected only the relevent variables, and removed all eggs that were oddly shaped (i.e. PE24 and SA16). Since this is a color analysis, if we did not measure the eggshell's color, I removed those eggs. 
 
@@ -39,8 +39,9 @@ egg <-  fullegg %>%
   filter(ELONGATION>1.1 & VOLUME<12.5) #Remove oddly shaped PE24 eggs and all SA16 eggs which are oddly large. 
 ```
 
-##3. Are there any basic factors we should be controlling for? 
-###3.1 Clutch Size
+## 3. Are there any basic factors we should be controlling for? 
+
+### 3.1 Clutch Size
 Almost all robin nests have 3-4 eggs. Would probably be best to constrain all analyses to these "typical" nesting conditions (drops 16 nests).
 ```{r}
 hist(egg$CLTCHSIZ)
@@ -62,7 +63,8 @@ summary(mod)
 
 ```
 Conclusion: There is no difference in eggshell color based on clutch size, including or excluding the small or large clutch sizes. Clutch size does not need to be controlled for in future analyses. 
-###3.2 Laying Date
+
+### 3.2 Laying Date
 There are a number of nests laid late in the year-- this is probably renests. I will exclude all nests laid after 165. 
 ```{r}
 hist(egg2$LAYDOY)
@@ -82,10 +84,11 @@ mod <- lmer(r.vec.egg ~ LAYDOY + (1|NestID), data=firstnests)
 summary(mod)
 plot(mod)
 ```
+
 Conclusions: There are clear differences based on laying date and seasonality. I will include laying date in all subsequent models. 
 
 
-###3.3 Year
+### 3.3 Year
 ```{r}
 ggplot(firstnests, aes(x=factor(YEAR), y=r.vec.egg))+
   geom_dotplot(binaxis = "y", stackdir = "center")
@@ -96,22 +99,20 @@ summary(mod)
 
 Conclusions: There are no differences in eggshell color by year, so I will not correct for year in future models. 
 
-###3.4 Incubation Stage (measurement of egg age)
+### 3.4 Incubation Stage (measurement of egg age)
 ```{r}
 ggplot(firstnests, aes(x=INCSTAGE, y=r.vec.egg))+
   geom_point()+
   geom_smooth()
-#OH there are some very old eggs included here. We will need to make sure to take this into account if we ever look at masses. 
-#DOesn't look like there's anythign there though
 
 mod <- lmer(r.vec.egg ~ INCSTAGE + (1|NestID), data=firstnests)
 summary(mod)
 plot(mod)
-#Nope don't need to control for incubation stage. 
 ```
+
 Conclusions: Incubation stage is not correlated to eggshell color. A lot of these eggs are QUITE old though, which we need to consider if we look at masses or anything else that is related to development. 
 
-###3.5 Laying order
+### 3.5 Laying order
 
 ```{r}
 ggplot(firstnests, aes(x=ESTORD, y=r.vec.egg))+
@@ -122,9 +123,10 @@ mod <- lmer(r.vec.egg ~ ESTORD + (1|NestID), data=firstnests)
 summary(mod)
 plot(mod)
 ```
+
 Conclusion: Laying order is not a significant predictor of eggshell color. We will not include it in future models. 
 
-###3.6 Kit (not sure what this is a kit FOR, but perhaps important?)
+### 3.6 Kit (not sure what this is a kit FOR, but perhaps important?)
 ```{r}
 ggplot(firstnests, aes(x=KIT, y=r.vec.egg))+
   geom_dotplot(binaxis = "y", stackdir = "center")
@@ -135,18 +137,20 @@ summary(mod)
 anova(mod)
 plot(mod)
 ```
-Conclusion: Philena's kit does differ from Lori's kit so we will need to control for that in all models. Probably the best way to do that is to just include a term for it. I could also mean center by kit-- I will do this for the plots. To do that I will have to remove the LP kit-- I don't know what kit that was supposed ot be, so can't really do much with it....
+
+Conclusion: Philena's kit does differ from Lori's kit so we will need to control for that in all models. Probably the best way to do that is to just include a term for it. I could also mean center by kit-- I will do this for the plots. To do that I will have to remove the LP kit-- I don't know what kit that was supposed ot be, so can't really do much with it.... I could also consider putting KIT into models as a random effect, but since there are only 2 levels, I think it's probably best to leave it as a fixed effect. 
 ```{r}
 firstnests2 <- firstnests %>% filter(KIT !="LP")
 ```
 
 
-##4. What does the blue green color of the egg signal?
+## 4. What does the blue green color of the egg signal?
 We will use the firstnests2 dataset in all of these analyses. It has all eggs that were laid before 165, are from 3-4 egg clutches, and have a known KIT. 
 
-###4.1 Does the blue green color signal egg quality? 
+### 4.1 Does the blue green color signal egg quality? 
 Test this by correlating egg color with 6 measures of egg quality
-####4.1a Carotenoid content of yolk
+
+#### 4.1a Carotenoid content of yolk
 ```{r}
 hist(firstnests2$Carot_ug_yolk)
 
@@ -169,7 +173,7 @@ summary(mod)
 ```
 Conclusion: There is no difference in color based on carotenoid content of egg yolk. 
 
-####4.1b Eggshell strength and thickness
+#### 4.1b Eggshell strength and thickness
 Eggshell strength and thickness are so related to volume, I've put volume into these models as well. 
 ```{r}
 ggplot(firstnests2, aes(x=MEANSTR, y=r.vec.egg))+
@@ -199,7 +203,7 @@ me this might suggest that the color of the egg actually might be adding
 something to the eggshell strength? Or alternatively, birds that increase color
 pigmentation also increase other factors in the eggshell
 
-####4.1c Volume
+#### 4.1c Volume
 ```{r}
 hist(firstnests2$VOLUME)
 
@@ -215,7 +219,7 @@ anova(mod)
 ```
 Conclusion: Larger eggs have higher R.vec.egg. Eggshell color is correlated to volume (after controlling for laying date and kit).
 
-####4.1d Yolk Mass
+#### 4.1d Yolk Mass
 ```{r}
 #Make a better dataset with only eggs that seperated properly for use with the yolk and albumen mass
 sep <- firstnests2 %>% 
@@ -244,7 +248,7 @@ summary(mod)
 Conclusions: There is no relationship between egg color and yolk mass. 
 
 
-####4.1e Albumen Mass
+#### 4.1e Albumen Mass
 ```{r}
 ggplot(firstnests2, aes(x=ALBMAS, y=r.vec.egg))+
   geom_point()+
@@ -265,7 +269,7 @@ anova(mod)
 Conclusions: there is no relationship with albumen mass
 
 
-####4.1f Testosterone Concentration
+#### 4.1f Testosterone Concentration
 ```{r}
 ggplot(firstnests2, aes(x=T_concentration, y=r.vec.egg))+
   geom_point()+
@@ -281,9 +285,10 @@ anova(mod)
 Conclusions: Testosterone concentration does not correlate with egg color
 
 
-###4.2 Does the blue green color signal female quality? 
+### 4.2 Does the blue green color signal female quality? 
 Test this by correlating egg color with 4 measures of female quality
-####4.1a Female bill color
+
+#### 4.1a Female bill color
 
 We have two measures of female bill color, r.vec.fem, and yellow area score. Interestingly they don't really correlate. I ran models of both. 
 ```{r}
@@ -305,7 +310,7 @@ summary(mod)
 ```
 Conclusions: Neither r.vec.fem nor yellow area score correlated with eggshell color. Carotenoids in the female's bill is not important to eggshell color. 
 
-####4.1b Ectoparasite load
+#### 4.1b Ectoparasite load
 As we did before, I suspect it would be much better to treat it as either ectoparasites, or no ectoparasites.
 
 ```{r}
@@ -327,9 +332,9 @@ summary(mod)
 anova(mod)
 
 ```
-Conclusion: Ectoparasite effect is not longer significnat once KIT is controlled for. Sigh. Nothin going on. 
+Conclusion: Ectoparasite effect is not longer significnat once KIT is controlled for. Sigh. Nothing going on. 
 
-####4.1c Scaled Mass Index
+#### 4.1c Scaled Mass Index
 First we need to calculate SMI for all birds (ie their mass if they had the mean tarsus length)
 ```{r}
 ggplot(data=firstnests2, aes(y=BMASS, x=TARSUS))+
@@ -343,7 +348,7 @@ firstnests2$SMI <- firstnests2$BMASS * ((L0/firstnests2$BMASS)^BSMA[[3]])
 ```
 Now we can assess whether eggshell color is correlated. 
 
-There are a number of birds that were caught well after the eggs were laid, rather than before like most. This could interact with eggshell color (ie a lighter bird late in the season could still be in good condition). I calculated the number of days between laying and catching the femal (FDIF). I also calculated whether the bird was caught before or after laying to simplify the model somewhat. 
+There are a number of birds that were caught well after the eggs were laid, rather than before like most. This could interact with eggshell color (ie a lighter bird late in the season could still be in good condition). I calculated the number of days between laying and catching the femal (FDIF). I also calculated whether the bird was caught before or after laying to simplify the model somewhat (FDIF2). 
 ```{r}
 ggplot(data=firstnests2, aes(x=SMI, y=r.vec.egg))+
   geom_point()+
@@ -374,7 +379,7 @@ anova(mod)
 Conclusions: SMI and body condition are not indicitive of eggshell color. 
 
 
-####4.1d Female Age
+#### 4.1d Female Age
 ```{r}
 ggplot(firstnests2 %>% filter(!is.na(AGE)), aes(x=factor(AGE), y=r.vec.egg))+
   geom_boxplot()
